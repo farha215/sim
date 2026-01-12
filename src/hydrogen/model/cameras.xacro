@@ -7,7 +7,7 @@
     <link name="${name}">
       <visual>
         <geometry>
-          <mesh filename="package://hydrogen/meshes/zed2i.stl"/>
+          <mesh filename="file://$(find hydrogen)/meshes/zed2i.stl"/>
         </geometry>
         <material name="zed_mat">
           <color rgba="0.2 0.2 0.2 1"/>
@@ -16,7 +16,7 @@
 
       <collision>
         <geometry>
-          <mesh filename="package://hydrogen/meshes/zed2i.stl"/>
+          <mesh filename="file://$(find hydrogen)/meshes/zed2i.stl"/>
         </geometry>
       </collision>
 
@@ -52,8 +52,8 @@
           <horizontal_fov>1.92</horizontal_fov>
 
           <image>
-            <width>1280</width>
-            <height>720</height>
+            <width>800</width>
+            <height>600</height>
             <format>R8G8B8</format>
           </image>
 

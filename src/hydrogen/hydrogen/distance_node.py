@@ -30,8 +30,8 @@ class ROIDepthManualDebug(Node):
         self.start_pt = None
 
         # Subscribers
-        self.depth_sub = Subscriber(self, Image, '/camera/depth_image_raw/down')
-        self.rgb_sub   = Subscriber(self, Image, '/camera/RGB_image_raw/down')
+        self.depth_sub = Subscriber(self, Image, '/camera/depth_image_raw/front')
+        self.rgb_sub   = Subscriber(self, Image, '/camera/RGB_image_raw/front')
 
         self.sync = ApproximateTimeSynchronizer(
             [self.depth_sub, self.rgb_sub],

@@ -21,7 +21,7 @@
       <visual>
         <geometry>
           <mesh
-            filename="package://hydrogen/meshes/auv2.stl"
+            filename="file://$(find hydrogen)/meshes/auv2.stl"
             scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="grey">
