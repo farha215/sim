@@ -61,6 +61,8 @@ setup(
             'test_ROI_Publisher = hydrogen.test_ROI_publisher:main',
             'thruster_teleop_GP = hydrogen.thruster_teleop_GP:main',
             'dataset_collector = hydrogen.dataset_collector:main',
+            'imu_node = hydrogen.hydrogen.imu_publisher:main',
+            'dshot_node = hydrogen.thruster_Dshot_publisher:main',
         ],
     },
 )
