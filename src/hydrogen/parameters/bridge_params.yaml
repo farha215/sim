@@ -4,14 +4,8 @@
   gz_type_name: gz.msgs.Clock
   direction: GZ_TO_ROS
 
-- ros_topic_name: /hydrogen/front_propeller/cmd_thrust
-  gz_topic_name: /model/Hydrogen/joint/front_propeller_joint/cmd_pos
-  ros_type_name: std_msgs/msg/Float64
-  gz_type_name: ignition.msgs.Double
-  direction: ROS_TO_GZ
-
-- ros_topic_name: /hydrogen/left_propeller_1/cmd_thrust
-  gz_topic_name: /model/Hydrogen/joint/left_propeller_1_joint/cmd_pos
+- ros_topic_name: /hydrogen/back_propeller/cmd_thrust
+  gz_topic_name: /model/Hydrogen/joint/back_propeller_joint/cmd_pos
   ros_type_name: std_msgs/msg/Float64
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ
@@ -22,14 +16,20 @@
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ
 
+- ros_topic_name: /hydrogen/right_propeller_2/cmd_thrust
+  gz_topic_name: /model/Hydrogen/joint/right_propeller_2_joint/cmd_pos
+  ros_type_name: std_msgs/msg/Float64
+  gz_type_name: ignition.msgs.Double
+  direction: ROS_TO_GZ
+
 - ros_topic_name: /hydrogen/left_propeller_2/cmd_thrust
   gz_topic_name: /model/Hydrogen/joint/left_propeller_2_joint/cmd_pos
   ros_type_name: std_msgs/msg/Float64
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ
 
-- ros_topic_name: /hydrogen/right_propeller_2/cmd_thrust            
-  gz_topic_name: /model/Hydrogen/joint/right_propeller_2_joint/cmd_pos
+- ros_topic_name: /hydrogen/left_propeller_1/cmd_thrust            
+  gz_topic_name: /model/Hydrogen/joint/left_propeller_1_joint/cmd_pos
   ros_type_name: std_msgs/msg/Float64
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ

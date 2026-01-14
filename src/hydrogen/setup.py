@@ -59,6 +59,8 @@ setup(
             'controller_node = hydrogen.controller_node:main',
             'distance_node = hydrogen.distance_node:main',
             'test_ROI_Publisher = hydrogen.test_ROI_publisher:main',
+            'thruster_teleop_GP = hydrogen.thruster_teleop_GP:main',
+            'dataset_collector = hydrogen.dataset_collector:main',
         ],
     },
 )

@@ -6,31 +6,7 @@
       name="ignition::gazebo::systems::Thruster"
       filename="ignition-gazebo-thruster-system">
       <namespace>Hydrogen</namespace>
-      <joint_name>front_propeller_joint</joint_name>
-      <thrust_coefficient>0.004422</thrust_coefficient>
-      <fluid_density>1000</fluid_density>
-      <propeller_diameter>0.2</propeller_diameter>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <plugin
-      name="ignition::gazebo::systems::Thruster"
-      filename="ignition-gazebo-thruster-system">
-      <namespace>Hydrogen</namespace>
-      <joint_name>left_propeller_1_joint</joint_name>
-      <thrust_coefficient>0.004422</thrust_coefficient>
-      <fluid_density>1000</fluid_density>
-      <propeller_diameter>0.2</propeller_diameter>
-    </plugin>
-  </gazebo>
-
-  <gazebo>
-    <plugin
-      name="ignition::gazebo::systems::Thruster"
-      filename="ignition-gazebo-thruster-system">
-      <namespace>Hydrogen</namespace>
-      <joint_name>left_propeller_2_joint</joint_name>
+      <joint_name>back_propeller_joint</joint_name>
       <thrust_coefficient>0.004422</thrust_coefficient>
       <fluid_density>1000</fluid_density>
       <propeller_diameter>0.2</propeller_diameter>
@@ -55,6 +31,30 @@
       filename="ignition-gazebo-thruster-system">
       <namespace>Hydrogen</namespace>
       <joint_name>right_propeller_2_joint</joint_name>
+      <thrust_coefficient>0.004422</thrust_coefficient>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.2</propeller_diameter>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <plugin
+      name="ignition::gazebo::systems::Thruster"
+      filename="ignition-gazebo-thruster-system">
+      <namespace>Hydrogen</namespace>
+      <joint_name>left_propeller_1_joint</joint_name>
+      <thrust_coefficient>0.004422</thrust_coefficient>
+      <fluid_density>1000</fluid_density>
+      <propeller_diameter>0.2</propeller_diameter>
+    </plugin>
+  </gazebo>
+
+  <gazebo>
+    <plugin
+      name="ignition::gazebo::systems::Thruster"
+      filename="ignition-gazebo-thruster-system">
+      <namespace>Hydrogen</namespace>
+      <joint_name>left_propeller_2_joint</joint_name>
       <thrust_coefficient>0.004422</thrust_coefficient>
       <fluid_density>1000</fluid_density>
       <propeller_diameter>0.2</propeller_diameter>
@@ -110,7 +110,7 @@
       <topic>joint_states</topic>
       <update_rate>30.0</update_rate>
       <frame_name>base_link</frame_name>
-      <joint_name>front_propeller_joint</joint_name>
+      <joint_name>back_propeller_joint</joint_name>
       <joint_name>left_propeller_1_joint</joint_name>
       <joint_name>left_propeller_2_joint</joint_name>
       <joint_name>right_propeller_1_joint</joint_name>

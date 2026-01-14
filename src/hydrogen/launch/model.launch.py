@@ -51,7 +51,7 @@ def generate_launch_description():
     )
 
     # ---------------- World ----------------
-    world_file = os.path.join(pkg_share, 'worlds', 'buoyant_pool.sdf')
+    world_file = os.path.join( worlds_path, 'buoyant_pool.sdf')
 
     gazebo_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(

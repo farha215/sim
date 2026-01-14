@@ -30,8 +30,8 @@ class TeleopNode(Node):
 
         # ================= Thruster Command Publishers (ALL 5) =================
         self.pubs = {
-            'front_propeller': self.create_publisher(
-                Float64, '/hydrogen/front_propeller/cmd_thrust', 10),
+            'back_propeller': self.create_publisher(
+                Float64, '/hydrogen/back_propeller/cmd_thrust', 10),
             'right_propeller_1': self.create_publisher(
                 Float64, '/hydrogen/right_propeller_1/cmd_thrust', 10),
             'right_propeller_2': self.create_publisher(
