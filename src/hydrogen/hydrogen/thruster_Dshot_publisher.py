@@ -23,6 +23,13 @@ CCW_MIN = 1001
 CCW_MAX = 2000
 
 # ============================================================
+# LOGGING CONFIG
+# ============================================================
+LOG_UART = True          # enable / disable logging
+LOG_RATE_DIV = 50        # log every N cycles (500Hz / 50 = 10Hz)
+
+
+# ============================================================
 # THRUSTER INDEX MAP (DO NOT CHANGE)
 # ============================================================
 # 0 -> back
@@ -95,6 +102,8 @@ class ThrusterUARTBridge(Node):
 
         # 500 Hz update
         self.timer = self.create_timer(0.002, self.send_uart)
+        self._log_counter = 0
+
 
         self.get_logger().info("Thruster UART bridge running")
 
@@ -103,16 +112,30 @@ class ThrusterUARTBridge(Node):
         self.thrust[idx] = msg.data
 
     def send_uart(self):
+        self._log_counter += 1
+        do_log = LOG_UART and (self._log_counter % LOG_RATE_DIV == 0)
+
         for i in range(5):
-            throttle = thrust_to_throttle(self.thrust[i])
+            thrust = self.thrust[i]
+            throttle = thrust_to_throttle(thrust)
             hi, lo = make_dshot_frame(throttle)
 
-            # Address byte + DSHOT frame
-            self.ser.write(bytes([
+            packet = bytes([
                 0x10 | i,
                 hi,
                 lo
-            ]))
+            ])
+
+            self.ser.write(packet)
+
+            if do_log:
+                self.get_logger().info(
+                    f"[THRUSTER {i}] "
+                    f"thrust={thrust:+7.2f} "
+                    f"throttle={throttle:4d} "
+                    f"bytes=[0x{packet[0]:02X} 0x{packet[1]:02X} 0x{packet[2]:02X}]"
+                )
+
 
     def stop_all(self):
         for i in range(5):

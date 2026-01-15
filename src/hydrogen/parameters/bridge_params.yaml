@@ -34,11 +34,11 @@
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ
   
-- ros_topic_name: /imu
-  gz_topic_name: /imu
-  ros_type_name: sensor_msgs/msg/Imu
-  gz_type_name: ignition.msgs.IMU
-  direction: GZ_TO_ROS
+# - ros_topic_name: /imu
+#   gz_topic_name: /imu
+#   ros_type_name: sensor_msgs/msg/Imu
+#   gz_type_name: ignition.msgs.IMU
+#   direction: GZ_TO_ROS
 
 - ros_topic_name: "joint_states"
   gz_topic_name: "joint_states"
