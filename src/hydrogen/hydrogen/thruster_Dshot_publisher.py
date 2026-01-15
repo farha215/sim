@@ -9,7 +9,7 @@ import sys
 # ============================================================
 # UART CONFIG
 # ============================================================
-UART_PORT = "/dev/serial0"     # use /dev/ttyAMA0 if needed
+UART_PORT = "/dev/ttyAMA0"     # use /dev/ttyAMA0 if needed
 UART_BAUD = 115200
 
 # ============================================================
