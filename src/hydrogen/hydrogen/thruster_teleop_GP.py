@@ -51,7 +51,7 @@ class GamepadTeleop(Node):
         self.axis_scale = 25.0  # thrust per full stick deflection
 
         self.timer = self.create_timer(0.05, self.publish_all)
-
+"""
         # ================= Pygame Init =================
         pygame.init()
         pygame.joystick.init()
@@ -63,6 +63,7 @@ class GamepadTeleop(Node):
         self.joy.init()
 
         self.get_logger().info(f"Gamepad connected: {self.joy.get_name()}")
+"""
 
     # ================= Controller Callbacks =================
     def cb_front(self, msg):
@@ -78,11 +79,8 @@ class GamepadTeleop(Node):
     def read_gamepad(self):
         pygame.event.pump()
 
-        # Axes (invert Y axes)
-        forward = -self.joy.get_axis(1)   # Left stick Y
-        yaw = self.joy.get_axis(2)        # Right stick X
-        roll = self.joy.get_axis(0)       # Left stick X
-        vertical = -self.joy.get_axis(3)  # Right stick Y
+        forward = -self.joy.get_axis(1)   # front/back
+        vertical = -self.joy.get_axis(3)  # up/down
 
         self.manual_offsets['left_propeller_1'] = -forward * self.axis_scale - yaw * self.axis_scale
         self.manual_offsets['right_propeller_1'] = -forward * self.axis_scale + yaw * self.axis_scale
@@ -92,8 +90,8 @@ class GamepadTeleop(Node):
         else:
             abs_thresh = 0
         self.manual_offsets['back_propeller'] = vertical * self.axis_scale - abs_thresh * self.axis_scale
-        self.manual_offsets['left_propeller_2'] = vertical * self.axis_scale  + roll * self.axis_scale
-        self.manual_offsets['right_propeller_2'] = vertical * self.axis_scale - roll * self.axis_scale
+       # self.manual_offsets['left_propeller_2'] = vertical * self.axis_scale  + roll * self.axis_scale
+       # self.manual_offsets['right_propeller_2'] = vertical * self.axis_scale - roll * self.axis_scale
 
         # Buttons
         if self.joy.get_button(0):  # A / Cross
@@ -101,6 +99,10 @@ class GamepadTeleop(Node):
 
         if self.joy.get_button(1):  # B / Circle
             raise KeyboardInterrupt
+        if self.joy.get_button():   #Yaw right
+            self.
+        if self.joy.get_button():   #yaw left
+            self.
 
     # ================= Publishing =================
     def publish_all(self):
