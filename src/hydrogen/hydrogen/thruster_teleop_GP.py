@@ -90,8 +90,8 @@ class GamepadTeleop(Node):
         else:
             abs_thresh = 0
         self.manual_offsets['back_propeller'] = vertical * self.axis_scale - abs_thresh * self.axis_scale
-       # self.manual_offsets['left_propeller_2'] = vertical * self.axis_scale  + roll * self.axis_scale
-       # self.manual_offsets['right_propeller_2'] = vertical * self.axis_scale - roll * self.axis_scale
+    # self.manual_offsets['left_propeller_2'] = vertical * self.axis_scale  + roll * self.axis_scale
+    # self.manual_offsets['right_propeller_2'] = vertical * self.axis_scale - roll * self.axis_scale
 
         # Buttons
         if self.joy.get_button(0):  # A / Cross
