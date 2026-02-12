@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+
+import rclpy
+from rclpy.node import Node
+from rclpy.parameter import Parameter
+
+from sensor_msgs.msg import Image, CameraInfo
+from vision_msgs.msg import Detection2DArray, Detection3DArray, Detection3D, ObjectHypothesisWithPose
+from geometry_msgs.msg import Pose, Point, Quaternion
+
+from cv_bridge import CvBridge
+import numpy as np
+import cv2
+
+from message_filters import Subscriber, ApproximateTimeSynchronizer
+
+
+class ROIDepthFusion(Node):
+
+    def __init__(self):
+        super().__init__('roi_depth_fusion_node')
+
+        # Use simulation time
+        self.set_parameters([
+            Parameter('use_sim_time', Parameter.Type.BOOL, True)
+        ])
+
+        # Parameters
+        self.declare_parameter('min_depth', 0.2)
+        self.declare_parameter('max_depth', 20.0)
+        self.declare_parameter('min_valid_pixels', 30)
+
+        self.min_depth = self.get_parameter('min_depth').value
+        self.max_depth = self.get_parameter('max_depth').value
+        self.min_valid = self.get_parameter('min_valid_pixels').value
+
+        self.bridge = CvBridge()
+        self.camera_info = None
+
+        # Subscribers with sync
+        self.depth_sub = Subscriber(self, Image, '/camera/depth_image_raw/front')
+        self.rgb_sub   = Subscriber(self, Image, '/camera/RGB_image_raw/front')
+        self.det_sub   = Subscriber(self, Detection2DArray, '/detections_2d')
+
+        self.info_sub = self.create_subscription(
+            CameraInfo,
+            '/camera_info_front',
+            self.camera_info_cb,
+            10
+        )
+
+        self.sync = ApproximateTimeSynchronizer(
+            [self.depth_sub, self.rgb_sub, self.det_sub],
+            queue_size=10,
+            slop=0.2
+        )
+        self.sync.registerCallback(self.synced_cb)
+
+        # Publisher
+        self.pub = self.create_publisher(
+            Detection3DArray,
+            '/detections_3d',
+            10
+        )
+
+        self.get_logger().info("ROI depth fusion node with visualization started.")
+
+    def camera_info_cb(self, msg: CameraInfo):
+        self.camera_info = msg
+
+    def synced_cb(self, depth_msg: Image,
+                  rgb_msg: Image,
+                  det_msg: Detection2DArray):
+
+        if self.camera_info is None:
+            return
+
+        depth_img = self.bridge.imgmsg_to_cv2(depth_msg, desired_encoding='32FC1')
+        rgb_img   = self.bridge.imgmsg_to_cv2(rgb_msg, desired_encoding='bgr8')
+
+        fx = self.camera_info.k[0]
+        fy = self.camera_info.k[4]
+        cx = self.camera_info.k[2]
+        cy = self.camera_info.k[5]
+
+        out = Detection3DArray()
+        out.header = det_msg.header
+
+        for det in det_msg.detections:
+            if not det.results:
+                continue
+
+            hyp = det.results[0].hypothesis
+            class_id = hyp.class_id
+            score = hyp.score
+
+            bbox = det.bbox
+
+            # ✅ FIXED: Pose2D → position.x / y
+            u = int(bbox.center.position.x)
+            v = int(bbox.center.position.y)
+            w = int(bbox.size_x)
+            h = int(bbox.size_y)
+
+            xmin = max(u - w // 2, 0)
+            xmax = min(u + w // 2, depth_img.shape[1] - 1)
+            ymin = max(v - h // 2, 0)
+            ymax = min(v + h // 2, depth_img.shape[0] - 1)
+
+            roi = depth_img[ymin:ymax, xmin:xmax].flatten()
+
+            roi = roi[np.isfinite(roi)]
+            roi = roi[(roi > self.min_depth) & (roi < self.max_depth)]
+
+            if roi.size < self.min_valid:
+                continue
+
+            z = float(np.median(roi))
+
+            # Back-project to 3D (camera frame)
+            x = (u - cx) * z / fx
+            y = (v - cy) * z / fy
+
+            det3d = Detection3D()
+            det3d.header = det.header
+
+            hyp3d = ObjectHypothesisWithPose()
+            hyp3d.hypothesis.class_id = class_id
+            hyp3d.hypothesis.score = score
+
+            pose = Pose()
+            pose.position = Point(x=x, y=y, z=z)
+            pose.orientation = Quaternion(w=1.0)
+
+            hyp3d.pose.pose = pose
+            det3d.results.append(hyp3d)
+
+            # 3D bounding box (rough placeholder)
+            det3d.bbox.center = pose
+            det3d.bbox.size.x = 0.1
+            det3d.bbox.size.y = 0.1
+            det3d.bbox.size.z = 0.1
+
+            out.detections.append(det3d)
+
+            # ---------- Visualization ----------
+            cv2.rectangle(rgb_img, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+            label = f"id:{class_id} {z:.2f} m"
+            cv2.putText(rgb_img, label,
+                        (xmin, max(ymin - 10, 0)),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (0, 255, 0), 2)
+
+        self.pub.publish(out)
+
+        cv2.imshow("ROI Depth Fusion", rgb_img)
+        cv2.waitKey(1)
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    node = ROIDepthFusion()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    cv2.destroyAllWindows()
+    node.destroy_node()
+    rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
