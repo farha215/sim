@@ -17,14 +17,14 @@
   <xacro:zed_camera
     name="zed_camera_front_link"
     parent="hydrogen_frame"
-    xyz="0.162 0 0.016"
+    xyz="0.31 0 0.1"
     rpy="0 0 0"/>
 
 
   <xacro:zed_camera
     name="zed_camera_down_link"
     parent="hydrogen_frame"
-    xyz="0.05 0 -0.08"
+    xyz="0.17 0 -0.04"
     rpy="0 1.5708 0"/>
 
 

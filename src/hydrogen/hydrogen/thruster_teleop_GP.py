@@ -48,10 +48,10 @@ class GamepadTeleop(Node):
 
         self.manual_offsets = {k: 0.0 for k in self.pubs}
         self.max_thrust = 100.0
-        self.axis_scale = 25.0  # thrust per full stick deflection
+        self.axis_scale = 25.0
 
         self.timer = self.create_timer(0.05, self.publish_all)
-"""
+
         # ================= Pygame Init =================
         pygame.init()
         pygame.joystick.init()
@@ -63,7 +63,6 @@ class GamepadTeleop(Node):
         self.joy.init()
 
         self.get_logger().info(f"Gamepad connected: {self.joy.get_name()}")
-"""
 
     # ================= Controller Callbacks =================
     def cb_front(self, msg):
@@ -79,30 +78,47 @@ class GamepadTeleop(Node):
     def read_gamepad(self):
         pygame.event.pump()
 
-        forward = -self.joy.get_axis(1)   # front/back
-        vertical = -self.joy.get_axis(3)  # up/down
+        forward = -self.joy.get_axis(1)
+        vertical = -self.joy.get_axis(3)
+        yaw = self.joy.get_axis(0)
+        roll = self.joy.get_axis(2)
 
-        self.manual_offsets['left_propeller_1'] = -forward * self.axis_scale - yaw * self.axis_scale
-        self.manual_offsets['right_propeller_1'] = -forward * self.axis_scale + yaw * self.axis_scale
+        # Forward + yaw control
+        self.manual_offsets['left_propeller_1'] = (
+            -forward * self.axis_scale - yaw * self.axis_scale
+        )
+        self.manual_offsets['right_propeller_1'] = (
+            -forward * self.axis_scale + yaw * self.axis_scale
+        )
 
-        if (roll < 0 or roll > 0):
-            abs_thresh = abs(roll)
-        else:
-            abs_thresh = 0
-        self.manual_offsets['back_propeller'] = vertical * self.axis_scale - abs_thresh * self.axis_scale
-    # self.manual_offsets['left_propeller_2'] = vertical * self.axis_scale  + roll * self.axis_scale
-    # self.manual_offsets['right_propeller_2'] = vertical * self.axis_scale - roll * self.axis_scale
+        # Vertical + roll control
+        self.manual_offsets['back_propeller'] = (
+            vertical * self.axis_scale
+        )
 
-        # Buttons
-        if self.joy.get_button(0):  # A / Cross
+        self.manual_offsets['left_propeller_2'] = (
+            vertical * self.axis_scale + roll * self.axis_scale
+        )
+
+        self.manual_offsets['right_propeller_2'] = (
+            vertical * self.axis_scale - roll * self.axis_scale
+        )
+
+        # ================= Buttons =================
+        if self.joy.get_button(0):  # A
             self.stop_all()
 
-        if self.joy.get_button(1):  # B / Circle
+        if self.joy.get_button(1):  # B
             raise KeyboardInterrupt
-        if self.joy.get_button():   #Yaw right
-            self.
-        if self.joy.get_button():   #yaw left
-            self.
+
+        # Example yaw buttons (LB/RB)
+        if self.joy.get_button(4):  # LB
+            self.manual_offsets['left_propeller_1'] -= self.axis_scale
+            self.manual_offsets['right_propeller_1'] += self.axis_scale
+
+        if self.joy.get_button(5):  # RB
+            self.manual_offsets['left_propeller_1'] += self.axis_scale
+            self.manual_offsets['right_propeller_1'] -= self.axis_scale
 
     # ================= Publishing =================
     def publish_all(self):
@@ -110,8 +126,11 @@ class GamepadTeleop(Node):
 
         for name, pub in self.pubs.items():
             ctrl = self.ctrl_values.get(name, 0.0)
-            blended = clamp(ctrl + self.manual_offsets[name],
-                            -self.max_thrust, self.max_thrust)
+            blended = clamp(
+                ctrl + self.manual_offsets[name],
+                -self.max_thrust,
+                self.max_thrust
+            )
 
             msg = Float64()
             msg.data = float(blended)
@@ -120,7 +139,11 @@ class GamepadTeleop(Node):
     def stop_all(self):
         for k in self.manual_offsets:
             self.manual_offsets[k] = 0.0
-        self.publish_all()
+
+        for pub in self.pubs.values():
+            msg = Float64()
+            msg.data = 0.0
+            pub.publish(msg)
 
 
 def main():
@@ -144,3 +167,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
