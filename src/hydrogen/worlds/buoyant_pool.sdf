@@ -185,7 +185,19 @@
         <include>
       <uri>model://buoy</uri>
       <name>red_buoy</name>
-      <pose>6.05 6 -0.52 0 0 0</pose>
+      <pose>-6.05 6 0 0 0 0</pose>
+    </include>
+    
+            <include>
+      <uri>model://octagon</uri>
+      <name>octagon</name>
+      <pose>0 11 0.75 0 0 0</pose>
+    </include>
+    
+	<include>
+      <uri>model://trash</uri>
+      <name>trash</name>
+      <pose>0 11 0.5 0 0 0</pose>
     </include>
 
     <model name="water_plane">

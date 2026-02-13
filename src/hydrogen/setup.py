@@ -43,7 +43,8 @@ setup(
         ('share/' + package_name + '/worlds/bruvs', package_files('worlds/bruvs')),
         ('share/' + package_name + '/worlds/pool', package_files('worlds/pool')),
         ('share/' + package_name + '/worlds/buoy', package_files('worlds/buoy')),
-
+        ('share/' + package_name + '/worlds/octagon', package_files('worlds/octagon')),
+        ('share/' + package_name + '/worlds/trash', package_files('worlds/trash')),
         # Parameters
         ('share/' + package_name + '/parameters', ['parameters/bridge_params.yaml']),
     ],
@@ -63,6 +64,7 @@ setup(
             'dataset_collector = hydrogen.dataset_collector:main',
             'imu_node = hydrogen.imu_publisher:main',
             'dshot_node = hydrogen.thruster_Dshot_publisher:main',
+            'distance_calc_node = hydrogen.distance_calc_node:main',
         ],
     },
 )

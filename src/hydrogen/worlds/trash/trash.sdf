@@ -1,0 +1,81 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="trash">
+    <static>true</static>
+    <link name="ladle_link">
+    <pose>0.2 0 -1.6 0 0 0</pose>
+      <collision name="ladle_collision">
+        <geometry>
+          <mesh>
+            <uri>model://trash/ladle.stl</uri>
+            <scale>0.001 0.001 0.001</scale>
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="ladle_visual">
+        <geometry>
+          <mesh>
+            <uri>model://trash/ladle.stl</uri>
+            <scale>0.01 0.01 0.01</scale>
+          </mesh>
+        </geometry>
+<material>
+    <ambient>0 1 0 1</ambient> 
+    <diffuse>0 1 0 1</diffuse>
+  </material>
+      </visual>
+    </link>
+    
+        <link name="bottle_link">
+            <pose>0.2 0.04 -1.6 0 0 0</pose>
+      <collision name="ladle_collision">
+        <geometry>
+          <mesh>
+            <uri>model://trash/bottle.stl</uri>
+
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="bottle_visual">
+        <geometry>
+          <mesh>
+            <uri>model://trash/bottle.stl</uri>
+            <scale>0.01 0.01 0.01</scale>
+          </mesh>
+        </geometry>
+  <material>
+    <ambient>1 0 0 1</ambient> 
+    <diffuse>1 0 0 1</diffuse>
+  </material>
+      </visual>
+    </link>
+    
+<link name="table_link">
+            <pose>0 0 0.3 0 3.14 0</pose>
+      <collision name="table_collision">
+        <geometry>
+          <mesh>
+            <uri>model://trash/table.stl</uri>
+
+          </mesh>
+        </geometry>
+      </collision>
+
+      <visual name="table_visual">
+        <geometry>
+          <mesh>
+            <uri>model://trash/table.stl</uri>
+            <scale>0.01 0.01 0.01</scale>
+          </mesh>
+        </geometry>
+          <material>
+    <ambient>0 0 1 1</ambient> 
+    <diffuse>0 0 1 1</diffuse>
+  </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
+

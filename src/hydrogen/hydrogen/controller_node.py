@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 
 import rclpy
 from rclpy.node import Node
@@ -66,7 +66,7 @@ class ControllerNode(Node):
     # ================= Main control loop =================
     def control_loop(self):
         if self.latest_imu is None:
-            return  # wait for first IMU
+            return  
 
         imu = self.latest_imu
 
