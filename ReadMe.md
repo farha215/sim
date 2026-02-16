@@ -23,7 +23,7 @@ Ensure that ROS 2 Humble and Gazebo Ignition Fortress are correctly installed an
 
 1.  **Clone the repository**:
     ```bash
-    git clone https://github.com/AnimeshM21/hydrogen.git
+    git clone https://github.com/MITB-AUVTeam/hydrogen.git
     cd hydrogen
     ```
 
@@ -52,10 +52,10 @@ Ensure that ROS 2 Humble and Gazebo Ignition Fortress are correctly installed an
 
 # NOTE :-
 
-Before statring the simulation you need to set the enviorinment variable for your gazebo plugin directory, which includes a custom plugin written by one of our members.
+Before statring the simulation you need to set the enviorinment variable for your gazebo plugin directory, which includes a custom plugin written by one of our team members.
 
 
 ```
 echo 'export IGN_GAZEBO_SYSTEM_PLUGIN_PATH=$IGN_GAZEBO_SYSTEM_PLUGIN_PATH:<path to your plugin folder>' >> ~/.bashrc
 ```
-use pwd command to find 
+use pwd command to find the path to your plugins folder.
