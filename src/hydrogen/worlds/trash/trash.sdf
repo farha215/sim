@@ -3,12 +3,12 @@
   <model name="trash">
     <static>true</static>
     <link name="ladle_link">
-    <pose>0.2 0 -1.6 0 0 0</pose>
+    <pose>0.1 0 -1.54 0 0 0</pose>
       <collision name="ladle_collision">
         <geometry>
           <mesh>
             <uri>model://trash/ladle.stl</uri>
-            <scale>0.001 0.001 0.001</scale>
+<scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
       </collision>
@@ -17,7 +17,7 @@
         <geometry>
           <mesh>
             <uri>model://trash/ladle.stl</uri>
-            <scale>0.01 0.01 0.01</scale>
+<scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
 <material>
@@ -28,12 +28,12 @@
     </link>
     
         <link name="bottle_link">
-            <pose>0.2 0.04 -1.6 0 0 0</pose>
+            <pose>0.2 0.0 -1.56 0 0 0</pose>
       <collision name="ladle_collision">
         <geometry>
           <mesh>
             <uri>model://trash/bottle.stl</uri>
-
+<scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
       </collision>
@@ -42,7 +42,7 @@
         <geometry>
           <mesh>
             <uri>model://trash/bottle.stl</uri>
-            <scale>0.01 0.01 0.01</scale>
+<scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
   <material>
@@ -53,12 +53,12 @@
     </link>
     
 <link name="table_link">
-            <pose>0 0 0.3 0 3.14 0</pose>
+            <pose>0 0 -0.60 0 3.14 0</pose>
       <collision name="table_collision">
         <geometry>
           <mesh>
             <uri>model://trash/table.stl</uri>
-
+                        <scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
       </collision>
@@ -67,7 +67,7 @@
         <geometry>
           <mesh>
             <uri>model://trash/table.stl</uri>
-            <scale>0.01 0.01 0.01</scale>
+            <scale>0.005 0.005 0.005</scale>
           </mesh>
         </geometry>
           <material>
