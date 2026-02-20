@@ -7,21 +7,16 @@
 
     <link name="hydrogen_frame">
       <inertial>
-        <origin xyz="0.0 0.0 -0.25" rpy="0 0 0"/>
-        <mass value="45.0"/>
-        <inertia
-          ixx="0.2276"
-          ixy="-0.004544"
-          ixz="-0.0004496"
-          iyy="0.1921"
-          iyz="-0.0001196"
-          izz="0.3559"/>
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+        <mass value="12.0"/>
+<inertia ixx="0.391803" iyy="0.876695" izz="1.065444" ixy="0.0" iyz="0.0" ixz="-0.006759"/>
       </inertial>
 
       <visual>
+      <origin xyz="0.008 0.0 0.0" rpy="0 0 1.57"/>
         <geometry>
           <mesh
-            filename="file://$(find hydrogen)/meshes/auv2.stl"
+            filename="file://$(find hydrogen)/meshes/auv.stl"
             scale="0.001 0.001 0.001"/>
         </geometry>
         <material name="grey">
@@ -30,9 +25,9 @@
       </visual>
 
       <collision name="hydrogen_frame_collision">
-        <origin xyz="0.008 0.0 0.0" rpy="0 0 0"/>
+        <origin xyz="0.0 0.0 0.1" rpy="0 0 0"/>
         <geometry>
-          <box size="0.45 0.45 0.25"/>
+          <box size="0.75 0.55 0.3"/>
         </geometry>
       </collision>
     </link>

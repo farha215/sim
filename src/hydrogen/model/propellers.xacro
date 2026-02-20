@@ -87,35 +87,35 @@
     <joint name="back_propeller_joint" type="continuous">
       <parent link="hydrogen_frame"/>
       <child link="front_propeller"/>
-      <origin xyz="-0.223 -0.00725 0.002" rpy="0 0 0"/>
+      <origin xyz="-0.3219 -0 0.0775" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
     </joint>
 
     <joint name="right_propeller_1_joint" type="continuous">
       <parent link="hydrogen_frame"/>
       <child link="left_propeller_1"/>
-      <origin xyz="-0.0631 -0.1734 0.016" rpy="-1.57 0 1.57"/>
+      <origin xyz="-0.1532 0.222 0.085" rpy="-1.57 0 1.57"/>
       <axis xyz="0 0 1"/>
     </joint>
 
     <joint name="right_propeller_2_joint" type="continuous">
       <parent link="hydrogen_frame"/>
       <child link="left_propeller_2"/>
-      <origin xyz="0.0697 -0.1734 0.002" rpy="0 0 0"/>
+      <origin xyz="0.1737 0.222 0.0775" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
     </joint>
 
     <joint name="left_propeller_1_joint" type="continuous">
       <parent link="hydrogen_frame"/>
       <child link="right_propeller_1"/>
-      <origin xyz="-0.0631 0.1734 0.016" rpy="-1.57 0 1.57"/>
+      <origin xyz="-0.1532 -0.222 0.085" rpy="-1.57 0 1.57"/>
       <axis xyz="0 0 1"/>
     </joint>
 
     <joint name="left_propeller_2_joint" type="continuous">
       <parent link="hydrogen_frame"/>
       <child link="right_propeller_2"/>
-      <origin xyz="0.0697 0.1734 0.002" rpy="0 0 0"/>
+      <origin xyz="00.1737 -0.222 0.0775" rpy="0 0 0"/>
       <axis xyz="0 0 1"/>
     </joint>
 
