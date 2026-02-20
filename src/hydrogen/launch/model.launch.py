@@ -146,7 +146,7 @@ def generate_launch_description():
     ld.add_action(robot_state_publisher)
     ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
-    ld.add_action(controller_node)
+    # ld.add_action(controller_node)
     ld.add_action(distance_calc_node)
     
 

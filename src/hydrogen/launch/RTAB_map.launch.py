@@ -89,7 +89,7 @@ def generate_launch_description():
             description='Topic for the camera info'),
 
         DeclareLaunchArgument(
-            'frame_id', default_value='zed_camera_front_link',
+            'frame_id', default_value='base_link',
             description='The TF frame of the camera (Optical frame, Z-forward)'),
 
         OpaqueFunction(function=launch_setup)
