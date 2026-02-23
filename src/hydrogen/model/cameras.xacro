@@ -4,6 +4,7 @@
   <!-- ================= ZED CAMERA MACRO ================= -->
   <xacro:macro name="zed_camera" params="name parent xyz rpy">
 
+    <!-- ================= Camera Physical Link ================= -->
     <link name="${name}">
       <visual>
         <geometry>
@@ -32,20 +33,37 @@
       </inertial>
     </link>
 
+    <!-- Mount camera to parent -->
     <joint name="${name}_joint" type="fixed">
       <parent link="${parent}"/>
       <child link="${name}"/>
       <origin xyz="${xyz}" rpy="${rpy}"/>
     </joint>
 
-    <!-- Gazebo RGBD camera -->
+
+    <!-- ================= Optical Frame (CRITICAL FIX) ================= -->
+    <!-- Converts robot frame (X forward, Z up)
+         to optical frame (Z forward, X right, Y down) -->
+
+    <link name="${name}_optical_frame"/>
+
+    <joint name="${name}_optical_joint" type="fixed">
+      <parent link="${name}"/>
+      <child link="${name}_optical_frame"/>
+      <origin xyz="0 0 0" rpy="-1.5708 0 -1.5708"/>
+    </joint>
+
+
+    <!-- ================= Gazebo RGBD Camera ================= -->
     <gazebo reference="${name}">
       <sensor name="${name}_sensor" type="rgbd_camera">
         <always_on>true</always_on>
         <update_rate>30</update_rate>
         <visualize>true</visualize>
 
-        <ignition_frame_id>${name}</ignition_frame_id>
+        <!-- IMPORTANT: Publish images in optical frame -->
+        <ignition_frame_id>${name}_optical_frame</ignition_frame_id>
+
         <topic>${name}</topic>
 
         <camera>
@@ -82,4 +100,3 @@
   </xacro:macro>
 
 </robot>
-
