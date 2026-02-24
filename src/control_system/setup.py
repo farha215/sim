@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'allocation_matrix = control_system.allocation_matrix:main',
+            'global_planner = control_system.global_planner_node:main',
         ],
     },
 )

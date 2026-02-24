@@ -1,0 +1,5 @@
+geometry_msgs/Pose target
+---
+nav_msgs/Path trajectory
+bool success
+string message
