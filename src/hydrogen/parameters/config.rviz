@@ -25,7 +25,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: PointCloud2
+    SyncSource: MAP
 Visualization Manager:
   Class: ""
   Displays:
@@ -237,7 +237,7 @@ Visualization Manager:
         Filter size: 10
         History Policy: Keep Last
         Reliability Policy: Reliable
-        Value: /octomap_obstacles
+        Value: /cloud_map
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
@@ -336,25 +336,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 11.314397811889648
+      Distance: 21.64154624938965
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.9231025576591492
-        Y: -1.3457945585250854
-        Z: 4.8595757484436035
+        X: 0.8167315721511841
+        Y: 20.144149780273438
+        Z: 2.7756943702697754
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.5397971272468567
+      Pitch: 0.42979666590690613
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz_default_plugins)
-      Yaw: 4.697391510009766
+      Yaw: 4.793296813964844
     Saved: ~
 Window Geometry:
   Displays:
