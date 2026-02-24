@@ -64,7 +64,6 @@ setup(
             'dataset_collector = hydrogen.dataset_collector:main',
             'imu_node = hydrogen.imu_publisher:main',
             'dshot_node = hydrogen.thruster_Dshot_publisher:main',
-            'distance_calc_node = hydrogen.distance_calc_node:main',
         ],
     },
 )
