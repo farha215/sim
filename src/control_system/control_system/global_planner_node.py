@@ -17,6 +17,7 @@ import tf2_ros
 from tf2_ros import TransformException
 from scipy.spatial.transform import Rotation as R
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy
+from geometry_msgs.msg import PoseStamped
 
 
 class GlobalPlanner(Node):
@@ -27,7 +28,10 @@ class GlobalPlanner(Node):
         # ================= Parameters =================
         self.voxel_size = 0.2
         self.robot_radius = 0.3
-        self.inflate_voxels = 0  # DISABLED FOR DEBUGGING
+        self.safety_margin = 0.1  # 10cm extra
+        self.inflate_voxels = int(math.ceil(
+            (self.robot_radius + self.safety_margin) / self.voxel_size
+        ))  # DISABLED FOR DEBUGGING
 
         # ================= Internal State =================
         self.current_pose = None
@@ -45,6 +49,15 @@ class GlobalPlanner(Node):
             '/cloud_map',
             self.cloud_callback,
             qos
+        )
+
+      
+
+        self.create_subscription(
+            PoseStamped,
+            '/goal_pose',
+            self.goal_callback,
+            10
         )
 
         # ================= TF =================
@@ -77,6 +90,18 @@ class GlobalPlanner(Node):
     # =====================================================
     # Service Callback
     # =====================================================
+    def goal_callback(self, msg):
+        self.get_logger().info("Received goal from RViz")
+
+        request = PlanPath.Request()
+        request.target = msg.pose
+
+        response = self.plan_path_callback(request, PlanPath.Response())
+
+        if response.success:
+            self.get_logger().info("RViz goal planned successfully")
+        else:
+            self.get_logger().warn(response.message)
 
     def plan_path_callback(self, request, response):
 
@@ -202,7 +227,37 @@ class GlobalPlanner(Node):
 
             occupancy[i, j, k] = 1
 
-        return occupancy, (min_x, min_y, min_z)
+        # ================= Spherical Inflation =================
+
+        inflated = occupancy.copy()
+
+        size_x, size_y, size_z = occupancy.shape
+
+        for i in range(size_x):
+            for j in range(size_y):
+                for k in range(size_z):
+
+                    if occupancy[i, j, k] == 1:
+
+                        for dx in range(-self.inflate_voxels, self.inflate_voxels + 1):
+                            for dy in range(-self.inflate_voxels, self.inflate_voxels + 1):
+                                for dz in range(-self.inflate_voxels, self.inflate_voxels + 1):
+
+                                    # Sphere condition (NOT cube)
+                                    if dx*dx + dy*dy + dz*dz > self.inflate_voxels*self.inflate_voxels:
+                                        continue
+
+                                    ni = i + dx
+                                    nj = j + dy
+                                    nk = k + dz
+
+                                    if 0 <= ni < size_x and \
+                                    0 <= nj < size_y and \
+                                    0 <= nk < size_z:
+
+                                        inflated[ni, nj, nk] = 1
+
+        return inflated, (min_x, min_y, min_z)
 
     # =====================================================
     # A* 3D
@@ -218,9 +273,11 @@ class GlobalPlanner(Node):
             )
 
         neighbors = [
-            (1,0,0),(-1,0,0),
-            (0,1,0),(0,-1,0),
-            (0,0,1),(0,0,-1)
+            (dx, dy, dz)
+            for dx in [-1, 0, 1]
+            for dy in [-1, 0, 1]
+            for dz in [-1, 0, 1]
+            if not (dx == 0 and dy == 0 and dz == 0)
         ]
 
         open_set = []
@@ -241,7 +298,9 @@ class GlobalPlanner(Node):
                 return path[::-1]
 
             for dx, dy, dz in neighbors:
-                nxt = (current[0]+dx, current[1]+dy, current[2]+dz)
+                nxt = (current[0] + dx,
+                    current[1] + dy,
+                    current[2] + dz)
 
                 if not self.in_bounds(nxt, grid):
                     continue
@@ -249,7 +308,9 @@ class GlobalPlanner(Node):
                 if grid[nxt] == 1:
                     continue
 
-                tentative = g_score[current] + 1
+                # Proper diagonal movement cost
+                step_cost = math.sqrt(dx*dx + dy*dy + dz*dz)
+                tentative = g_score[current] + step_cost
 
                 if nxt not in g_score or tentative < g_score[nxt]:
                     came_from[nxt] = current

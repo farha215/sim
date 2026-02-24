@@ -200,7 +200,7 @@
       <pose>0 11 0.5 0 0 0</pose>
     </include>
 
-    <model name="water_plane">
+    <!-- <model name="water_plane">
       <static>true</static>
       <pose>0 0 0 0 0 0</pose>
 
@@ -231,7 +231,7 @@
 
         <enable_wind>false</enable_wind>
       </link>
-    </model>
+    </model> -->
 
     <light name="sun" type="directional">
       <pose>100 10 10 0 0 0</pose>
