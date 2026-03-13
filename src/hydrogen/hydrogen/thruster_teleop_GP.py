@@ -85,10 +85,10 @@ class GamepadTeleop(Node):
 
         # Forward + yaw control
         self.manual_offsets['left_propeller_1'] = (
-            -forward * self.axis_scale - yaw * self.axis_scale
+            -forward * self.axis_scale + yaw * self.axis_scale
         )
         self.manual_offsets['right_propeller_1'] = (
-            -forward * self.axis_scale + yaw * self.axis_scale
+            -forward * self.axis_scale - yaw * self.axis_scale
         )
 
         # Vertical + roll control
@@ -97,11 +97,11 @@ class GamepadTeleop(Node):
         )
 
         self.manual_offsets['left_propeller_2'] = (
-            vertical * self.axis_scale + roll * self.axis_scale
+            vertical * self.axis_scale - roll * self.axis_scale
         )
 
         self.manual_offsets['right_propeller_2'] = (
-            vertical * self.axis_scale - roll * self.axis_scale
+            vertical * self.axis_scale + roll * self.axis_scale
         )
 
         # ================= Buttons =================

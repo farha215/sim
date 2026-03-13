@@ -8,7 +8,7 @@
     <link name="hydrogen_frame">
       <inertial>
         <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
-        <mass value="45.0"/>
+        <mass value="50.0"/>
         <inertia
           ixx="0.2276"
           ixy="-0.004544"
