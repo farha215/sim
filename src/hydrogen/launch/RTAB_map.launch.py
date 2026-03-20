@@ -64,6 +64,10 @@ def launch_setup(context: LaunchContext, *args, **kwargs):
             package='rtabmap_viz', executable='rtabmap_viz', output='screen',
             parameters=parameters,
             remappings=remappings
+        ),
+
+        Node(
+            package='control_system', executable='global_planner', output='screen', 
         )
     ]
 

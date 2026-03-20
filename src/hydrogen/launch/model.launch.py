@@ -120,8 +120,7 @@ def generate_launch_description():
     	name='controller_node',
     	output='screen',
     	parameters=[{'use_sim_time':True}]
-    )
-    
+    )    
 
     # ---------------- Launch Description ----------------
     ld = LaunchDescription()
