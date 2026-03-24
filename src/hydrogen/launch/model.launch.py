@@ -114,12 +114,11 @@ def generate_launch_description():
         parameters=[{'use_sim_time': True}]
     )
     
-    controller_node = Node(
-    	package='hydrogen',
-    	executable='controller_node',
-    	name='controller_node',
+    thruster_allocator = Node(
+    	package='control_system',
+    	executable='allocation_matrix',
+    	name='allocation_matrix',
     	output='screen',
-    	parameters=[{'use_sim_time':True}]
     )    
 
     # ---------------- Launch Description ----------------
@@ -138,6 +137,7 @@ def generate_launch_description():
     ld.add_action(robot_state_publisher)
     ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
+    ld.add_action(thruster_allocator)
     
 
     return ld

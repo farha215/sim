@@ -27,6 +27,7 @@ setup(
             'allocation_matrix = control_system.allocation_matrix:main',
             'global_planner = control_system.global_planner_node:main',
             '6dof_pid = control_system.6dof_pid:main',
+            'los_controller = control_system.los_control:main',
         ],
     },
 )
