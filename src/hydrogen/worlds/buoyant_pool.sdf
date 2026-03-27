@@ -218,7 +218,7 @@
     <include>
       <uri>model://preq_task</uri>
       <name>preq_task</name>
-      <pose>-2 0 -1.2 0 0 0</pose>
+      <pose>-5 -22 -1.2 0 0 0</pose>
     </include>
 
     
