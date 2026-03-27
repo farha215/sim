@@ -45,6 +45,7 @@ setup(
         ('share/' + package_name + '/worlds/buoy', package_files('worlds/buoy')),
         ('share/' + package_name + '/worlds/octagon', package_files('worlds/octagon')),
         ('share/' + package_name + '/worlds/trash', package_files('worlds/trash')),
+        ('share/' + package_name + '/worlds/preq_task', package_files('worlds/preq_task')),
         # Parameters
         ('share/' + package_name + '/parameters', ['parameters/bridge_params.yaml']),
     ],
@@ -64,6 +65,8 @@ setup(
             'dataset_collector = hydrogen.dataset_collector:main',
             'imu_node = hydrogen.imu_publisher:main',
             'dshot_node = hydrogen.thruster_Dshot_publisher:main',
+            'yolo_node = hydrogen.yolo_node:main',
+            'data_distance_node = hydrogen.data_distance_node:main',
         ],
     },
 )
