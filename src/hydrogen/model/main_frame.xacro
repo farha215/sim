@@ -51,6 +51,7 @@
         <update_rate>200</update_rate>
         <visualize>true</visualize>
         <topic>imu</topic>
+        <ignition_frame_id>base_link</ignition_frame_id>
       </sensor>
     </gazebo>
 

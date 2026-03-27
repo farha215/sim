@@ -85,21 +85,25 @@
       filename="ignition-gazebo-hydrodynamics-system">
       <link_name>base_link</link_name>
 
-      <xU>-5</xU>
-      <yV>-5</yV>
-      <zW>-5</zW>
+        <!-- Linear translational -->
+      <xU>-13.5</xU>
+      <yV>-27.7</yV>
+      <zW>-50.7</zW>
 
-      <xUabsU>-5</xUabsU>
-      <yVabsV>-5</yVabsV>
-      <zWabsW>-5</zWabsW>
+        <!-- Quadratic translational -->
+      <xUabsU>-67.7</xUabsU>
+      <yVabsV>-138.4</yVabsV>
+      <zWabsW>-253.7</zWabsW>
 
-      <kP>-10</kP>
-      <mQ>-10</mQ>
-      <nR>-10</nR>
+        <!-- Linear rotational -->
+      <kP>-1.3</kP>
+      <mQ>-2.4</mQ>
+      <nR>-1.3</nR>
 
-      <kPabsP>-0.5</kPabsP>
-      <mQabsQ>-0.5</mQabsQ>
-      <nRabsR>-0.5</nRabsR>
+        <!-- Quadratic rotational -->
+      <kPabsP>-6.4</kPabsP>
+      <mQabsQ>-11.9</mQabsQ>
+      <nRabsR>-6.5</nRabsR>
     </plugin>
   </gazebo>
 
