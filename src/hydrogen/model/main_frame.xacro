@@ -8,14 +8,14 @@
     <link name="hydrogen_frame">
       <inertial>
         <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
-        <mass value="45.0"/>
+        <mass value="33.93"/>
         <inertia
-          ixx="0.2276"
-          ixy="-0.004544"
-          ixz="-0.0004496"
-          iyy="0.1921"
-          iyz="-0.0001196"
-          izz="0.3559"/>
+          ixx="0.1716"
+          ixy="-0.003426"
+          ixz="-0.0003390"
+          iyy="0.1448"
+          iyz="-0.00009018"
+          izz="0.2683"/>
       </inertial>
 
       <visual>
@@ -31,9 +31,9 @@
       </visual>
 
       <collision name="hydrogen_frame_collision">
-        <origin xyz="-0.00013 0.0 0.15" rpy="0 0 0"/>
+        <origin xyz="-0.00013 0.0 0.12" rpy="0 0 0"/>
         <geometry>
-          <box size="0.75 0.55 0.3"/>
+          <box size="0.45 0.35 0.22"/>
         </geometry>
       </collision>
     </link>

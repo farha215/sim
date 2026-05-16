@@ -16,7 +16,7 @@
       <graded_buoyancy>
         <default_density>1000</default_density>
         <density_change>
-          <above_depth>2</above_depth>
+          <above_depth>1</above_depth>
           <density>1</density>
         </density_change>
       </graded_buoyancy>
@@ -55,7 +55,7 @@
       <name>pool</name>
       <pose>0 0 -1.5 0 0 0</pose>
     </include>
-
+<!-- 
     <include>
       <uri>model://pathmarker</uri>
       <name>pathmarker1</name>
@@ -212,13 +212,13 @@
       <uri>model://trash</uri>
       <name>trash</name>
       <pose>0 11 0.5 0 0 0</pose>
-    </include>
+    </include> -->
 
   
     <include>
       <uri>model://preq_task</uri>
       <name>preq_task</name>
-      <pose>-5 -22 -1.2 0 0 0</pose>
+      <pose>-5 -20 -1.2 0 0 0</pose>
     </include>
 
     

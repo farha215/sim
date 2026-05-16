@@ -119,13 +119,21 @@ def generate_launch_description():
     	executable='allocation_matrix',
     	name='allocation_matrix',
     	output='screen',
-    )    
+    )
+
+    pico_controller = Node(
+    	package='control_system',
+    	executable='pico_controller',
+    	name='pico_controller',
+    	output='screen',
+    	parameters=[{'use_sim_time': True}],
+    )
 
     # ---------------- Launch Description ----------------
     ld = LaunchDescription()
 
-    ld.add_action(DeclareLaunchArgument('x', default_value='3.5', description='Spawn X position'))
-    ld.add_action(DeclareLaunchArgument('y', default_value='-21.5', description='Spawn Y position'))
+    ld.add_action(DeclareLaunchArgument('x', default_value='-4.5', description='Spawn X position'))
+    ld.add_action(DeclareLaunchArgument('y', default_value='-22.0', description='Spawn Y position'))
     ld.add_action(DeclareLaunchArgument('z', default_value='2.5', description='Spawn Z position'))
     ld.add_action(DeclareLaunchArgument('R', default_value='0.0', description='Spawn Roll'))
     ld.add_action(DeclareLaunchArgument('P', default_value='0.0', description='Spawn Pitch'))
@@ -138,7 +146,8 @@ def generate_launch_description():
     ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
     ld.add_action(thruster_allocator)
-    
+    ld.add_action(pico_controller)
+
 
     return ld
 

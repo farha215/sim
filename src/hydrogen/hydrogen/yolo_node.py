@@ -8,6 +8,7 @@ import cv2
 import os
 from ultralytics import YOLO
 from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
+from ament_index_python.packages import get_package_share_directory
 
 
 class ImageCollector(Node):
@@ -25,7 +26,10 @@ class ImageCollector(Node):
 
         self.bridge = CvBridge()
 
-        self.model = YOLO("/home/farha/auvws/hydrogen/src/hydrogen/hydrogen/best.pt")
+        # Dynamic path to the YOLO model
+        package_share_directory = get_package_share_directory('hydrogen')
+        model_path = os.path.join(package_share_directory, 'best.pt')
+        self.model = YOLO(model_path)
 
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path)

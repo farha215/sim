@@ -48,6 +48,8 @@ setup(
         ('share/' + package_name + '/worlds/preq_task', package_files('worlds/preq_task')),
         # Parameters
         ('share/' + package_name + '/parameters', ['parameters/bridge_params.yaml']),
+        # YOLO model
+        ('share/' + package_name, ['hydrogen/best.pt']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/ToPico.msg"
   "srv/PlanPath.srv"
   DEPENDENCIES geometry_msgs nav_msgs
 )

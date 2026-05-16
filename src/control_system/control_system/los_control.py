@@ -253,7 +253,37 @@ class VFGController(Node):
 
         i = self.idx
         if i >= len(self.waypoints) - 1:
-            self.cmd_pub.publish(Twist())
+            # ── Position Hold Logic at Final Waypoint ──────────────────
+            target = self.waypoints[-1]
+            px, py, pz = self.pos
+            
+            # Errors in global frame
+            dx = target[0] - px
+            dy = target[1] - py
+            dz = target[2] - pz
+            
+            # Transform to body frame (surge/sway)
+            cos_y, sin_y = math.cos(self.yaw), math.sin(self.yaw)
+            error_surge =  dx * cos_y + dy * sin_y
+            error_sway  = -dx * sin_y + dy * cos_y
+            
+            # Surge/Sway command (P-velocity with inner loop)
+            # Use k_u as a general linear gain
+            surge_cmd = self.k_u * (0.8 * error_surge - self.u)
+            sway_cmd  = self.k_u * (0.8 * error_sway) # No lateral speed feedback in odom?
+            
+            # Depth / Heave
+            # Use k_depth for heave correction
+            heave_cmd = -2.0 * self.k_depth * dz
+            
+            # Yaw: Keep facing the direction of the last segment arrival
+            # (or just hold current heading if no better info)
+            cmd = Twist()
+            cmd.linear.x = float(surge_cmd)
+            cmd.linear.y = float(sway_cmd)
+            cmd.linear.z = float(heave_cmd)
+            cmd.angular.z = 0.0 # Hold heading
+            self.cmd_pub.publish(cmd)
             return
 
         A, B = self.waypoints[i], self.waypoints[i+1]
@@ -282,11 +312,17 @@ class VFGController(Node):
         yaw_err = math.atan2(math.sin(chi_d - self.yaw),
                              math.cos(chi_d - self.yaw))
 
-        # ── Depth / pitch ──────────────────────────────────────────────
+        # ── Depth / pitch / heave ──────────────────────────────────────
         dxy     = math.sqrt((bx-ax)**2 + (by-ay)**2)
         pitch_d = math.atan2(-(bz-az), dxy) if dxy > 1e-6 else 0.0
         t       = max(0.0, min(1.0, s_actual / L)) if L > 1e-6 else 0.0
-        z_err   = pz - (az + t*(bz-az))
+        z_target = az + t*(bz-az)
+        z_err    = pz - z_target
+
+        # Direct Heave Command (Active depth control)
+        # Assuming Z-up: pz > z_target means too high -> heave negative
+        heave_cmd = -3.0 * self.k_depth * z_err
+
         pitch_d -= self.k_depth * z_err
         pitch_err = math.atan2(math.sin(pitch_d - self.pitch),
                                math.cos(pitch_d - self.pitch))
@@ -297,14 +333,16 @@ class VFGController(Node):
         # ── Waypoint switching ─────────────────────────────────────────
         bx_, by_, bz_ = B
         px_, py_, pz_ = self.pos
-        near = math.sqrt((px_-bx_)**2+(py_-by_)**2+(pz_-bz_)**2) < self.switch_dist
-        if (s_actual >= L - 1e-3 or near) and self.idx < len(self.waypoints) - 2:
+        dist_to_B = math.sqrt((px_-bx_)**2+(py_-by_)**2+(pz_-bz_)**2)
+        if (s_actual >= L - 1e-3 or dist_to_B < self.switch_dist) and self.idx < len(self.waypoints) - 1:
             self.idx    += 1
             self.int_ye  = 0.0
+            self.get_logger().info(f"Reached waypoint {self.idx}")
 
         # ── Publish ────────────────────────────────────────────────────
         cmd = Twist()
         cmd.linear.x  = float(surge_cmd)
+        cmd.linear.z  = float(heave_cmd)
         cmd.angular.z = float(max(-self.yaw_rate_max,
                                   min(self.yaw_rate_max, self.k_yaw * yaw_err)))
         cmd.angular.y = float(max(-self.pitch_rate_max,

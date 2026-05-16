@@ -27,8 +27,8 @@ class GlobalPlanner(Node):
 
         # ================= Parameters =================
         self.voxel_size        = 0.2
-        self.robot_radius      = 0.5
-        self.safety_margin     = 0.1
+        self.robot_radius      = 0.3
+        self.safety_margin     = 0.05
         self.inflate_voxels    = int(math.ceil(
             (self.robot_radius + self.safety_margin) / self.voxel_size
         ))

@@ -19,9 +19,9 @@ class ThrusterMixer(Node):
         self.B = np.array([
             [-1,   -1,   0,    0,    0],     # Fx
             [0,   0,   0,    0,    0],     # Fy (no sway authority)
-            [0,   0,  -1,   -1,   -1],     # Fz
-            [0,   0,   W,   -W,    0],     # τx (roll)
-            [0,   0,   Lf,   Lf,  -Lr],    # τy (pitch)
+            [0,   0,    1,    1,    1],     # Fz (Changed to +1 for consistency with Gazebo and Tx, Ty)
+            [0,   0,    W,   -W,    0],     # τx (roll)
+            [0,   0,    Lf,   Lf,  -Lr],    # τy (pitch)
             [-W,  W,   0,    0,    0],     # τz (yaw)
         ], dtype=float)
 

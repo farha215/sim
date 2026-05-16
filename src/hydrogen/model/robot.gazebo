@@ -128,7 +128,7 @@
         filename="libauv_absolute_depth.so"
         name="AUVAbsoluteDepth">
         <!-- Reference plane (e.g., water surface) -->
-        <reference_z>0.0</reference_z>
+        <reference_z>1.0</reference_z>
         <!-- Ignition Transport topic -->
         <topic>/altimeter</topic>
       </plugin>
