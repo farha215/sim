@@ -5,96 +5,28 @@
             <!-- 1. System Check -->
             <Condition ID="AllSystemsOK" name="all_systems_check"/>
 
-            <!-- 2. Save Home location as T0 -->
-            <Action ID="SaveToBlackboard" name="save_t0"
-                    key="{T0}"/>
+            <!-- 2. Dive to operating depth (positive-down, metres) -->
+            <Action ID="DiveToDepth" name="dive_to_depth"
+                    target_depth="1.5"/>
 
-            <!-- 3. Mapping Scan: rotate full 360 once -->
-            <Action ID="Full360Scan" name="mapping_scan"/>
+            <!-- 3. Spin until the gate is in view, then stop facing it (depth held). -->
+            <Action ID="Do360Turn" name="search_for_gate"
+                    success_when_seen="GATE"/>
 
-            <!-- 4. Find and Track Gate once -->
-            <Sequence>
-                <Action ID="Do360Turn" name="search_for_gate"
-                        success_when_seen="GATE"/>
-                <Action ID="TrackObject" name="track_gate"
-                        object="GATE" pose="{GatePose}"/>
-            </Sequence>
+            <!-- 4. Lock yaw onto the gate, surge in, then commit through. -->
+            <Action ID="GoThroughObject" name="go_through_gate"
+                    object="GATE"/>
 
-            <!-- 5. Plan T1 (Just before the gate) -->
-            <Action ID="CalculateObjectTarget" name="calc_t1"
-                    object_pose="{GatePose}" offset_forward="0.5" offset_lateral="0.0" offset_vertical="0.0"
-                    target="{T1}"/>
-            <Action ID="PlanPathTo" name="plan_to_t1"
-                    target="{T1}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_t1"
-                       target="{T1}" tolerance="0.5"/>
+            <!-- 5. After the gate, lock onto the pole and approach until within 1 m. -->
+            <Action ID="ApproachObject" name="approach_pole"
+                    object="POLE"
+                    stop_distance="1.0"
+                    delta_d="1.0"
+                    timeout="20.0"/>
 
-            <!-- 6. Plan T2 (After the gate) -->
-            <Action ID="CalculateObjectTarget" name="calc_t2"
-                    object_pose="{GatePose}" offset_forward="-2.5" offset_lateral="0.0" offset_vertical="0.0"
-                    target="{T2}"/>
-            <Action ID="PlanPathTo" name="plan_to_t2"
-                    target="{T2}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_t2"
-                       target="{T2}" tolerance="0.5"/>
-
-            <!-- 7. Move straight until pole is spotted -->
-            <Parallel success_count="1" failure_count="1">
-                <Condition ID="IsObjectSeen" name="is_pole_seen"
-                           object="POLE"/>
-                <Action ID="MoveStraight" name="approach_pole"
-                        speed="1.0"/>
-            </Parallel>
-            
-            <!-- Track Pole Global Pose -->
-            <Action ID="TrackObject" name="track_pole"
-                    object="POLE" pose="{PolePose}"/>
-
-            <!-- 8. Orbit Pole: Left -> Behind -> Right -->
-            <!-- Left of pole -->
-            <Action ID="CalculateObjectTarget" name="calc_p1"
-                    object_pose="{PolePose}" offset_forward="0.0" offset_lateral="2.0" offset_vertical="0.0"
-                    target="{P1}"/>
-            <Action ID="PlanPathTo" name="plan_to_p1"
-                    target="{P1}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_p1"
-                       target="{P1}" tolerance="0.5"/>
-
-            <!-- Behind pole -->
-            <Action ID="CalculateObjectTarget" name="calc_p2"
-                    object_pose="{PolePose}" offset_forward="2.0" offset_lateral="0.0" offset_vertical="0.0"
-                    target="{P2}"/>
-            <Action ID="PlanPathTo" name="plan_to_p2"
-                    target="{P2}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_p2"
-                       target="{P2}" tolerance="0.5"/>
-
-            <!-- Right of pole -->
-            <Action ID="CalculateObjectTarget" name="calc_p3"
-                    object_pose="{PolePose}" offset_forward="0.0" offset_lateral="-2.0" offset_vertical="0.0"
-                    target="{P3}"/>
-            <Action ID="PlanPathTo" name="plan_to_p3"
-                    target="{P3}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_p3"
-                       target="{P3}" tolerance="0.5"/>
-
-            <!-- 9. Return to T2 -->
-            <Action ID="PlanPathTo" name="return_to_t2"
-                    target="{T2}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_t2_back"
-                       target="{T2}" tolerance="0.5"/>
-
-            <!-- 10. Return to T1 -->
-            <Action ID="PlanPathTo" name="return_to_t1"
-                    target="{T1}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_t1_back"
-                       target="{T1}" tolerance="0.5"/>
-
-            <!-- 11. Return Home (T0) -->
-            <Action ID="PlanPathTo" name="return_home"
-                    target="{T0}"/>
-            <Condition ID="WaitUntilReached" name="wait_reached_t0"
-                       target="{T0}" tolerance="0.5"/>
+            <!-- 6. Sit at the pole and hold depth so the AUV doesn't drift up. -->
+            <Action ID="HoldPosition" name="hold_at_pole"
+                    duration="-1.0"/>
 
         </Sequence>
     </BehaviorTree>

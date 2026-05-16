@@ -26,9 +26,13 @@ int main(int argc, char** argv) {
     ctx->tf_buffer = std::make_shared<tf2_ros::Buffer>(node->get_clock());
     ctx->tf_listener = std::make_shared<tf2_ros::TransformListener>(*ctx->tf_buffer);
 
-    // Actuator publisher (consumed by allocation_matrix → thrusters)
+    // Actuator publishers
+    //   /cmd_vel  — legacy direct path (allocation_matrix subscribes)
+    //   /to_pico  — preferred path (pico_controller closes PIDs, publishes /cmd_vel itself)
     ctx->cmd_vel_pub =
         node->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+    ctx->to_pico_pub =
+        node->create_publisher<custom_interfaces::msg::ToPico>("/to_pico", 10);
 
     // Global Planner Client
     ctx->path_client = node->create_client<custom_interfaces::srv::PlanPath>("plan_path");
@@ -53,13 +57,14 @@ int main(int argc, char** argv) {
                 ctx->imu_received = true;
             });
 
-    // /altimeter — altitude above pool floor (Float64, from Gazebo bridge)
+    // /altimeter — absolute depth (Float64, positive-down, from Gazebo bridge)
     ctx->alt_sub =
         node->create_subscription<std_msgs::msg::Float64>(
             "/altimeter", 10,
             [ctx](const std_msgs::msg::Float64::SharedPtr msg) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
-                ctx->latest_altimeter = msg->data;
+                ctx->latest_altimeter   = msg->data;
+                ctx->altimeter_received = true;
             });
 
     // /detections_3d — 3-D bounding boxes from data_distance_node (YOLO + depth fusion)

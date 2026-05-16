@@ -8,23 +8,25 @@ static std::shared_ptr<RobotContext> getCtx(const BT::NodeConfig& cfg) {
 }
 
 // ─── 1. AllSystemsOK ─────────────────────────────────────────────────────────
+// Object-oriented nav: we only require /imu (yaw) and /altimeter (depth).
+// /odom is intentionally NOT required — RTAB-Map may not be running.
 BT::NodeStatus AllSystemsOK::tick() {
     auto ctx = getCtx(config());
     rclcpp::spin_some(ctx->node);
 
-    if (!ctx->odom_received) {
-        RCLCPP_WARN_THROTTLE(ctx->node->get_logger(),
-                             *ctx->node->get_clock(), 2000,
-                             "[AllSystemsOK] Waiting for /odom ...");
-        return BT::NodeStatus::RUNNING;
-    }
     if (!ctx->imu_received) {
         RCLCPP_WARN_THROTTLE(ctx->node->get_logger(),
                              *ctx->node->get_clock(), 2000,
                              "[AllSystemsOK] Waiting for /imu ...");
         return BT::NodeStatus::RUNNING;
     }
-    RCLCPP_INFO(ctx->node->get_logger(), "[AllSystemsOK] All systems nominal.");
+    if (!ctx->altimeter_received) {
+        RCLCPP_WARN_THROTTLE(ctx->node->get_logger(),
+                             *ctx->node->get_clock(), 2000,
+                             "[AllSystemsOK] Waiting for /altimeter ...");
+        return BT::NodeStatus::RUNNING;
+    }
+    RCLCPP_INFO(ctx->node->get_logger(), "[AllSystemsOK] All systems nominal (imu + altimeter).");
     return BT::NodeStatus::SUCCESS;
 }
 
@@ -47,11 +49,13 @@ BT::NodeStatus DiveToDepth::onStart() {
     auto depth_in = getInput<double>("target_depth");
     if (!depth_in)
         throw BT::RuntimeError("DiveToDepth: missing required port [target_depth]");
-    target_z_ = depth_in.value();
+    target_depth_ = depth_in.value();
 
     auto ctx = getCtx(config());
     RCLCPP_INFO(ctx->node->get_logger(),
-                "[DiveToDepth] Commanding dive to z = %.2f m", target_z_);
+                "[DiveToDepth] Commanding dive to depth = %.2f m (positive-down)",
+                target_depth_);
+    ctx->publishToPico(0.0, 0.0, target_depth_, 1);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -59,18 +63,19 @@ BT::NodeStatus DiveToDepth::onRunning() {
     auto ctx = getCtx(config());
     rclcpp::spin_some(ctx->node);
 
-    double current_z = ctx->getCurrentPose().z;
-    double dz        = target_z_ - current_z;
+    double alt = ctx->getAltimeter();
+    double err = target_depth_ - alt;
 
-    if (std::abs(dz) < depth_tolerance_) {
-        ctx->stopMotion();
+    if (std::abs(err) < depth_tolerance_) {
         RCLCPP_INFO(ctx->node->get_logger(),
-                    "[DiveToDepth] Reached target depth (current z = %.2f m)", current_z);
+                    "[DiveToDepth] Reached target depth (altimeter = %.2f m).", alt);
+        // Keep holding the target depth on the way out so pico_controller doesn't lose setpoint.
+        ctx->publishToPico(0.0, 0.0, target_depth_, 1);
         return BT::NodeStatus::SUCCESS;
     }
 
-    double heave = clampVal(K_DEPTH * dz, -MAX_HEAVE, MAX_HEAVE);
-    ctx->publishCmdVel(0.0, 0.0, heave, 0.0, 0.0, 0.0);
+    // Just keep the setpoint fresh — pico_controller closes the loop.
+    ctx->publishToPico(0.0, 0.0, target_depth_, 1);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -106,12 +111,15 @@ BT::NodeStatus Do360Turn::onStart() {
     auto ctx = getCtx(config());
     rclcpp::spin_some(ctx->node);
 
+    phase_           = Phase::SEARCHING;
     prev_yaw_        = ctx->getCurrentPose().yaw;
     accumulated_yaw_ = 0.0;
 
     RCLCPP_INFO(ctx->node->get_logger(),
-                "[Do360Turn] Searching for %s (360° sweep)", target_object_.c_str());
-    ctx->publishCmdVel(0.0, 0.0, 0.0, 0.0, 0.0, TURN_RATE);
+                "[Do360Turn] SEARCHING for %s (delta_yaw=%.2f, depth=%.2f)",
+                target_object_.c_str(), DELTA_YAW_SETPOINT, ctx->last_target_depth);
+
+    ctx->publishToPico(DELTA_YAW_SETPOINT, 0.0, ctx->last_target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -119,29 +127,66 @@ BT::NodeStatus Do360Turn::onRunning() {
     auto ctx = getCtx(config());
     rclcpp::spin_some(ctx->node);
 
-    // Early success when target object appears
-    if (ctx->isObjectSeen(target_object_)) {
-        ctx->stopMotion();
+    // ───── SEARCHING ─────────────────────────────────────────────────────────
+    if (phase_ == Phase::SEARCHING) {
+        if (ctx->isObjectSeen(target_object_)) {
+            phase_ = Phase::ALIGNING;
+            RCLCPP_INFO(ctx->node->get_logger(),
+                        "[Do360Turn] %s spotted — entering ALIGNING phase.",
+                        target_object_.c_str());
+            // Fall through into alignment logic this same tick.
+        } else {
+            // Accumulate yaw for the 360° timeout.
+            double current_yaw = ctx->getCurrentPose().yaw;
+            double delta       = std::abs(normalizeAngle(current_yaw - prev_yaw_));
+            accumulated_yaw_  += delta;
+            prev_yaw_          = current_yaw;
+
+            if (accumulated_yaw_ >= FULL_CIRCLE) {
+                ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+                RCLCPP_WARN(ctx->node->get_logger(),
+                            "[Do360Turn] Full rotation complete — %s not found.",
+                            target_object_.c_str());
+                return BT::NodeStatus::FAILURE;
+            }
+
+            ctx->publishToPico(DELTA_YAW_SETPOINT, 0.0, ctx->last_target_depth, 0);
+            return BT::NodeStatus::RUNNING;
+        }
+    }
+
+    // ───── ALIGNING ──────────────────────────────────────────────────────────
+    // Drive yaw so the object's horizontal offset (ox) in the camera optical frame
+    // goes to zero. Depth stays held by pico_controller — we never touch delta_d.
+    double ox, oy, oz;
+    if (!ctx->getObjectPosition(target_object_, ox, oy, oz)) {
+        // Lost the detection — fall back to spinning to reacquire.
+        RCLCPP_WARN_THROTTLE(ctx->node->get_logger(),
+                             *ctx->node->get_clock(), 1000,
+                             "[Do360Turn] Lost %s during alignment — re-searching.",
+                             target_object_.c_str());
+        phase_ = Phase::SEARCHING;
+        ctx->publishToPico(DELTA_YAW_SETPOINT, 0.0, ctx->last_target_depth, 0);
+        return BT::NodeStatus::RUNNING;
+    }
+
+    // Bearing-to-object in the camera optical frame.
+    // Sign verified empirically: AUV needs negative delta_yaw when ox > 0 so the
+    // yaw PID drives toward the object instead of away from it.
+    double bearing = -std::atan2(ox, std::max(oz, 0.3));
+
+    if (std::abs(bearing) < ALIGN_TOL) {
+        ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
         RCLCPP_INFO(ctx->node->get_logger(),
-                    "[Do360Turn] %s found — stopping rotation.", target_object_.c_str());
+                    "[Do360Turn] Aligned on %s (bearing=%.3f rad, depth=%.2f). SUCCESS.",
+                    target_object_.c_str(), bearing, ctx->last_target_depth);
         return BT::NodeStatus::SUCCESS;
     }
 
-    // Accumulate absolute yaw change using normalised delta
-    double current_yaw = ctx->getCurrentPose().yaw;
-    double delta       = std::abs(normalizeAngle(current_yaw - prev_yaw_));
-    accumulated_yaw_  += delta;
-    prev_yaw_          = current_yaw;
-
-    if (accumulated_yaw_ >= FULL_CIRCLE) {
-        ctx->stopMotion();
-        RCLCPP_WARN(ctx->node->get_logger(),
-                    "[Do360Turn] Full rotation complete — %s not found.",
-                    target_object_.c_str());
-        return BT::NodeStatus::FAILURE;
-    }
-
-    ctx->publishCmdVel(0.0, 0.0, 0.0, 0.0, 0.0, TURN_RATE);
+    ctx->publishToPico(bearing, 0.0, ctx->last_target_depth, 0);
+    RCLCPP_DEBUG(ctx->node->get_logger(),
+                 "[Do360Turn] ALIGN bearing=%.3f rad (ox=%.2f, oz=%.2f)",
+                 bearing, ox, oz);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -565,4 +610,214 @@ BT::NodeStatus TrackObject::onRunning() {
 }
 
 void TrackObject::onHalted() {
+}
+
+// ─── 15. GoThroughObject ──────────────────────────────────────────────────────
+BT::NodeStatus GoThroughObject::onStart() {
+    auto obj = getInput<std::string>("object");
+    if (!obj)
+        throw BT::RuntimeError("GoThroughObject: missing required port [object]");
+    target_object_ = obj.value();
+
+    auto ctx = getCtx(config());
+    phase_                 = Phase::TRACKING;
+    smoothed_bearing_      = 0.0;
+    smoothed_delta_d_      = 0.0;
+    smoothing_initialized_ = false;
+    RCLCPP_INFO(ctx->node->get_logger(),
+                "[GoThroughObject] TRACKING %s — depth held at %.2f m.",
+                target_object_.c_str(), ctx->last_target_depth);
+    return BT::NodeStatus::RUNNING;
+}
+
+BT::NodeStatus GoThroughObject::onRunning() {
+    auto ctx = getCtx(config());
+    rclcpp::spin_some(ctx->node);
+
+    double ox, oy, oz;
+    bool seen = ctx->getObjectPosition(target_object_, ox, oy, oz);
+
+    // ── Phase transitions: TRACKING → COMMITTING ─────────────────────────────
+    if (phase_ == Phase::TRACKING) {
+        if (!seen) {
+            RCLCPP_INFO(ctx->node->get_logger(),
+                        "[GoThroughObject] Lost %s — committing.",
+                        target_object_.c_str());
+            phase_        = Phase::COMMITTING;
+            commit_start_ = ctx->node->now();
+        } else if (oz < CLOSE_RANGE) {
+            RCLCPP_INFO(ctx->node->get_logger(),
+                        "[GoThroughObject] %s within %.2f m — committing.",
+                        target_object_.c_str(), CLOSE_RANGE);
+            phase_        = Phase::COMMITTING;
+            commit_start_ = ctx->node->now();
+        }
+    }
+
+    // ── COMMITTING ───────────────────────────────────────────────────────────
+    if (phase_ == Phase::COMMITTING) {
+        double elapsed = (ctx->node->now() - commit_start_).seconds();
+        if (elapsed >= COMMIT_DURATION) {
+            ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+            RCLCPP_INFO(ctx->node->get_logger(),
+                        "[GoThroughObject] Through %s after %.1fs commit. SUCCESS.",
+                        target_object_.c_str(), elapsed);
+            return BT::NodeStatus::SUCCESS;
+        }
+
+        // LPF setpoints toward (bearing=0, delta_d=COMMIT_DELTA_D). Ramps the
+        // surge command up smoothly instead of jumping straight to saturation.
+        smoothed_bearing_ = LPF_ALPHA_COMMIT * smoothed_bearing_
+                          + (1.0 - LPF_ALPHA_COMMIT) * 0.0;
+        smoothed_delta_d_ = LPF_ALPHA_COMMIT * smoothed_delta_d_
+                          + (1.0 - LPF_ALPHA_COMMIT) * COMMIT_DELTA_D;
+        ctx->publishToPico(smoothed_bearing_, smoothed_delta_d_,
+                           ctx->last_target_depth, 0);
+        return BT::NodeStatus::RUNNING;
+    }
+
+    // ── TRACKING (object visible, oz ≥ CLOSE_RANGE) ──────────────────────────
+    double raw_bearing = -std::atan2(ox, std::max(oz, 0.3));
+    raw_bearing = clampVal(raw_bearing, -MAX_TRACK_BEARING, MAX_TRACK_BEARING);
+    double raw_delta_d = clampVal(oz - CLOSE_RANGE, 0.0, MAX_TRACK_DELTA_D);
+
+    // First TRACKING tick: start setpoints at zero so the AUV ramps in smoothly
+    // from the prior STOP state instead of jumping to the raw values.
+    if (!smoothing_initialized_) {
+        smoothed_bearing_      = 0.0;
+        smoothed_delta_d_      = 0.0;
+        smoothing_initialized_ = true;
+    }
+    smoothed_bearing_ = LPF_ALPHA_TRACK * smoothed_bearing_
+                      + (1.0 - LPF_ALPHA_TRACK) * raw_bearing;
+    smoothed_delta_d_ = LPF_ALPHA_TRACK * smoothed_delta_d_
+                      + (1.0 - LPF_ALPHA_TRACK) * raw_delta_d;
+
+    ctx->publishToPico(smoothed_bearing_, smoothed_delta_d_,
+                       ctx->last_target_depth, 0);
+    RCLCPP_DEBUG(ctx->node->get_logger(),
+                 "[GoThroughObject] TRACK bearing=%.3f delta_d=%.2f (raw_oz=%.2f, raw_ox=%.2f)",
+                 smoothed_bearing_, smoothed_delta_d_, oz, ox);
+    return BT::NodeStatus::RUNNING;
+}
+
+void GoThroughObject::onHalted() {
+    auto ctx = getCtx(config());
+    ctx->stopMotion();
+    RCLCPP_WARN(ctx->node->get_logger(), "[GoThroughObject] Halted.");
+}
+
+// ─── 16. ApproachObject ───────────────────────────────────────────────────────
+BT::NodeStatus ApproachObject::onStart() {
+    auto obj  = getInput<std::string>("object");
+    auto sd   = getInput<double>("stop_distance");
+    auto dd   = getInput<double>("delta_d");
+    auto tout = getInput<double>("timeout");
+    if (!obj || !sd || !dd || !tout)
+        throw BT::RuntimeError("ApproachObject: missing required ports");
+
+    target_object_         = obj.value();
+    stop_distance_         = sd.value();
+    delta_d_               = dd.value();
+    timeout_               = tout.value();
+    smoothed_bearing_      = 0.0;
+    smoothed_delta_d_      = 0.0;
+    smoothing_initialized_ = false;
+
+    auto ctx = getCtx(config());
+    start_time_ = ctx->node->now();
+
+    RCLCPP_INFO(ctx->node->get_logger(),
+                "[ApproachObject] Approaching %s — yaw-lock + surge (delta_d=%.2f), "
+                "stop at oz<%.2fm, depth=%.2f, timeout=%.1fs.",
+                target_object_.c_str(), delta_d_, stop_distance_,
+                ctx->last_target_depth, timeout_);
+    return BT::NodeStatus::RUNNING;
+}
+
+BT::NodeStatus ApproachObject::onRunning() {
+    auto ctx = getCtx(config());
+    rclcpp::spin_some(ctx->node);
+
+    double ox, oy, oz;
+    bool seen = ctx->getObjectPosition(target_object_, ox, oy, oz);
+
+    if (seen && oz < stop_distance_) {
+        ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+        RCLCPP_INFO(ctx->node->get_logger(),
+                    "[ApproachObject] %s within %.2f m (oz=%.2f). SUCCESS — depth held at %.2f.",
+                    target_object_.c_str(), stop_distance_, oz, ctx->last_target_depth);
+        return BT::NodeStatus::SUCCESS;
+    }
+
+    double elapsed = (ctx->node->now() - start_time_).seconds();
+    if (elapsed >= timeout_) {
+        ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+        RCLCPP_WARN(ctx->node->get_logger(),
+                    "[ApproachObject] Timed out after %.1fs — %s not within %.2f m.",
+                    elapsed, target_object_.c_str(), stop_distance_);
+        return BT::NodeStatus::FAILURE;
+    }
+
+    // Raw setpoints: yaw-lock when the object is visible, else go straight.
+    double raw_bearing = 0.0;
+    if (seen) {
+        raw_bearing = -std::atan2(ox, std::max(oz, 0.3));
+        raw_bearing = clampVal(raw_bearing, -MAX_BEARING, MAX_BEARING);
+    }
+
+    // First tick: start setpoints at zero so we ramp in smoothly.
+    if (!smoothing_initialized_) {
+        smoothed_bearing_      = 0.0;
+        smoothed_delta_d_      = 0.0;
+        smoothing_initialized_ = true;
+    }
+    smoothed_bearing_ = LPF_ALPHA * smoothed_bearing_ + (1.0 - LPF_ALPHA) * raw_bearing;
+    smoothed_delta_d_ = LPF_ALPHA * smoothed_delta_d_ + (1.0 - LPF_ALPHA) * delta_d_;
+
+    ctx->publishToPico(smoothed_bearing_, smoothed_delta_d_, ctx->last_target_depth, 0);
+    return BT::NodeStatus::RUNNING;
+}
+
+void ApproachObject::onHalted() {
+    auto ctx = getCtx(config());
+    ctx->stopMotion();
+    RCLCPP_WARN(ctx->node->get_logger(), "[ApproachObject] Halted.");
+}
+
+// ─── 17. HoldPosition ─────────────────────────────────────────────────────────
+BT::NodeStatus HoldPosition::onStart() {
+    auto d = getInput<double>("duration");
+    if (!d) throw BT::RuntimeError("HoldPosition: missing required port [duration]");
+    duration_   = d.value();
+    auto ctx = getCtx(config());
+    start_time_ = ctx->node->now();
+    RCLCPP_INFO(ctx->node->get_logger(),
+                "[HoldPosition] Holding depth=%.2f m %s.",
+                ctx->last_target_depth,
+                duration_ < 0 ? "indefinitely" : ("for " + std::to_string(duration_) + "s").c_str());
+    ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+    return BT::NodeStatus::RUNNING;
+}
+
+BT::NodeStatus HoldPosition::onRunning() {
+    auto ctx = getCtx(config());
+    rclcpp::spin_some(ctx->node);
+    ctx->publishToPico(0.0, 0.0, ctx->last_target_depth, 1);
+
+    if (duration_ < 0.0) return BT::NodeStatus::RUNNING;  // forever
+
+    double elapsed = (ctx->node->now() - start_time_).seconds();
+    if (elapsed >= duration_) {
+        RCLCPP_INFO(ctx->node->get_logger(),
+                    "[HoldPosition] Held for %.1fs. SUCCESS.", elapsed);
+        return BT::NodeStatus::SUCCESS;
+    }
+    return BT::NodeStatus::RUNNING;
+}
+
+void HoldPosition::onHalted() {
+    auto ctx = getCtx(config());
+    ctx->stopMotion();
+    RCLCPP_WARN(ctx->node->get_logger(), "[HoldPosition] Halted.");
 }

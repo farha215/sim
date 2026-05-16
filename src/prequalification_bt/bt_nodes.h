@@ -15,6 +15,7 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include "custom_interfaces/srv/plan_path.hpp"
+#include "custom_interfaces/msg/to_pico.hpp"
 
 #include <cmath>
 #include <memory>
@@ -57,11 +58,16 @@ struct RobotContext {
     double                                         latest_altimeter = 0.0;
     vision_msgs::msg::Detection3DArray::SharedPtr  latest_detections;
 
-    bool odom_received = false;
-    bool imu_received  = false;
+    bool odom_received      = false;
+    bool imu_received       = false;
+    bool altimeter_received = false;
 
-    // Actuator publisher
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub;
+    // Actuator publishers
+    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub;        // legacy direct path
+    rclcpp::Publisher<custom_interfaces::msg::ToPico>::SharedPtr to_pico_pub;  // preferred (goes through pico_controller PIDs)
+
+    // Last commanded depth — retained so stopMotion() / stale ticks hold depth instead of dropping it.
+    double last_target_depth = 0.0;
 
     // Service Client for Global Planner
     rclcpp::Client<custom_interfaces::srv::PlanPath>::SharedPtr path_client;
@@ -215,7 +221,8 @@ struct RobotContext {
         return false;
     }
 
-    // Publishes a 6-DOF velocity command to /cmd_vel (consumed by allocation_matrix)
+    // Publishes a 6-DOF velocity command directly to /cmd_vel (bypasses pico_controller).
+    // Kept for legacy nodes that have not been migrated to /to_pico.
     void publishCmdVel(double surge, double sway, double heave,
                        double roll_r, double pitch_r, double yaw_r) {
         geometry_msgs::msg::Twist cmd;
@@ -228,7 +235,30 @@ struct RobotContext {
         cmd_vel_pub->publish(cmd);
     }
 
-    void stopMotion() { publishCmdVel(0, 0, 0, 0, 0, 0); }
+    // Preferred command path: setpoints/errors go to pico_controller which closes the loops.
+    //   delta_yaw     yaw error    (rad)
+    //   delta_d       surge error  (m)
+    //   target_depth  abs depth setpt (m, positive-down)
+    //   stop_bit      1 = zero surge/sway/yaw; depth still tracks target_depth
+    void publishToPico(double delta_yaw, double delta_d,
+                       double target_depth, uint8_t stop_bit) {
+        custom_interfaces::msg::ToPico msg;
+        msg.delta_yaw    = static_cast<float>(delta_yaw);
+        msg.delta_d      = static_cast<float>(delta_d);
+        msg.target_depth = static_cast<float>(target_depth);
+        msg.stop_bit     = stop_bit;
+        last_target_depth = target_depth;
+        to_pico_pub->publish(msg);
+    }
+
+    // Hold the last commanded depth, kill surge/sway/yaw.
+    void stopMotion() { publishToPico(0.0, 0.0, last_target_depth, 1); }
+
+    // Latest altimeter reading (positive-down).
+    double getAltimeter() {
+        std::lock_guard<std::mutex> g(mtx);
+        return latest_altimeter;
+    }
 };
 
 // ─── Math utilities ───────────────────────────────────────────────────────────
@@ -271,22 +301,21 @@ public:
 };
 
 // 3. DiveToDepth
-//    Commands heave (cmd_vel.linear.z) until odom.z reaches target_depth.
+//    Publishes /to_pico with stop_bit=1 holding target_depth.
+//    Succeeds when |altimeter - target_depth| < depth_tolerance_.
 class DiveToDepth : public BT::StatefulActionNode {
 public:
     DiveToDepth(const std::string& name, const BT::NodeConfig& config)
         : BT::StatefulActionNode(name, config) {}
     static BT::PortsList providedPorts() {
-        return { BT::InputPort<double>("target_depth", "Target z in metres") };
+        return { BT::InputPort<double>("target_depth", "Target depth in metres (positive-down)") };
     }
     BT::NodeStatus onStart()   override;
     BT::NodeStatus onRunning() override;
     void           onHalted()  override;
 private:
-    double target_z_        = 0.0;
+    double target_depth_    = 0.0;
     double depth_tolerance_ = 0.15;
-    static constexpr double K_DEPTH   = 3.0;
-    static constexpr double MAX_HEAVE = 5.0;
 };
 
 // 4. IsObjectSeen
@@ -302,9 +331,12 @@ public:
 };
 
 // 5. Do360Turn
-//    Spins at constant yaw rate.
-//    Returns SUCCESS early if the target object is detected.
-//    Returns FAILURE after a full 360° revolution.
+//    Two phases, both via /to_pico (depth held by pico_controller throughout):
+//      SEARCHING : spin at a constant delta_yaw setpoint until the target object is seen.
+//                  Returns FAILURE if a full 360° passes without a detection.
+//      ALIGNING  : feed the bearing-to-object as delta_yaw so the yaw PID centres the
+//                  object horizontally in the camera frame. SUCCESS when |bearing|
+//                  is within ALIGN_TOL.
 class Do360Turn : public BT::StatefulActionNode {
 public:
     Do360Turn(const std::string& name, const BT::NodeConfig& config)
@@ -317,11 +349,19 @@ public:
     BT::NodeStatus onRunning() override;
     void           onHalted()  override;
 private:
+    enum class Phase { SEARCHING, ALIGNING };
+    Phase       phase_           = Phase::SEARCHING;
     std::string target_object_;
     double      prev_yaw_        = 0.0;
     double      accumulated_yaw_ = 0.0;
-    static constexpr double TURN_RATE   = 0.4;
-    static constexpr double FULL_CIRCLE = 2.0 * M_PI;
+    // Constant yaw-error setpoint sent to pico_controller during SEARCHING — large
+    // enough to drive the yaw PID well above noise and produce a steady spin.
+    // Sign = direction (positive = CCW per ROS REP-103).
+    static constexpr double DELTA_YAW_SETPOINT = 0.3;
+    static constexpr double FULL_CIRCLE        = 2.0 * M_PI;
+    // Alignment tolerance: |bearing-to-object| must be under this for SUCCESS.
+    // 0.05 rad ≈ 3° — "almost in camera yaw centre".
+    static constexpr double ALIGN_TOL          = 0.05;
 };
 
 // 6. NavigateTo
@@ -495,6 +535,108 @@ private:
     static constexpr double FULL_CIRCLE = 2.0 * M_PI;
 };
 
+// 15. GoThroughObject
+//     Approach an object using camera-relative tracking, then commit forward to pass it.
+//
+//     TRACKING:    delta_yaw = -atan2(ox, oz)  (lock yaw onto centre)
+//                  delta_d   = oz - CLOSE_RANGE (drive surge toward object)
+//     COMMITTING:  oz dropped below CLOSE_RANGE OR detection lost while tracking
+//                  → surge blindly forward at COMMIT_DELTA_D for COMMIT_DURATION seconds.
+//
+//     Depth is unchanged — pico_controller continues holding the last target_depth.
+class GoThroughObject : public BT::StatefulActionNode {
+public:
+    GoThroughObject(const std::string& name, const BT::NodeConfig& config)
+        : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() {
+        return { BT::InputPort<std::string>("object", "Target object: GATE or POLE") };
+    }
+    BT::NodeStatus onStart()   override;
+    BT::NodeStatus onRunning() override;
+    void           onHalted()  override;
+private:
+    enum class Phase { TRACKING, COMMITTING };
+    Phase        phase_         = Phase::TRACKING;
+    std::string  target_object_;
+    rclcpp::Time commit_start_;
+    // CLOSE_RANGE: oz at which we hand off from tracking to blind-surge.
+    static constexpr double CLOSE_RANGE     = 0.8;
+    // COMMIT_DURATION: total blind-surge time — long enough for the tail of the
+    // AUV to clear the gate, not just the front camera.
+    static constexpr double COMMIT_DURATION = 6.0;
+    // COMMIT_DELTA_D: synthetic surge error fed during commit. Sized to saturate
+    // the surge PID (kp_surge·err ≥ surge_limit), giving max push.
+    static constexpr double COMMIT_DELTA_D  = 30.0;
+    // Setpoint smoothing: low-pass-filtered toward the raw bearing / delta_d.
+    // Kills D-term spikes from noisy camera measurements and ramps the setpoint
+    // gradually across phase transitions so the AUV doesn't lurch.
+    //   τ = -dt/ln(α) at 10 Hz tick → α=0.90 → τ ≈ 0.95 s (smooth approach)
+    //                                  α=0.70 → τ ≈ 0.28 s (faster commit ramp)
+    static constexpr double LPF_ALPHA_TRACK  = 0.90;
+    static constexpr double LPF_ALPHA_COMMIT = 0.70;
+    static constexpr double MAX_TRACK_BEARING = 0.25;  // rad
+    static constexpr double MAX_TRACK_DELTA_D = 0.4;   // m of synthetic error
+
+    // Smoothed setpoint state (between ticks).
+    double smoothed_bearing_       = 0.0;
+    double smoothed_delta_d_       = 0.0;
+    bool   smoothing_initialized_  = false;
+};
+
+// 16. ApproachObject
+//     Surges forward while yaw-locking onto the target object until it is within
+//     `stop_distance` metres (camera-frame oz). Setpoints are LPF-smoothed so
+//     pico_controller never sees a step input. Depth held from previous action.
+//     Returns FAILURE on timeout.
+class ApproachObject : public BT::StatefulActionNode {
+public:
+    ApproachObject(const std::string& name, const BT::NodeConfig& config)
+        : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() {
+        return {
+            BT::InputPort<std::string>("object",        "Target object: POLE or GATE"),
+            BT::InputPort<double>     ("stop_distance", "Stop when object's oz < this (m)"),
+            BT::InputPort<double>     ("delta_d",       "Surge error setpoint (m)"),
+            BT::InputPort<double>     ("timeout",       "Seconds before giving up (FAILURE)")
+        };
+    }
+    BT::NodeStatus onStart()   override;
+    BT::NodeStatus onRunning() override;
+    void           onHalted()  override;
+private:
+    std::string  target_object_;
+    double       stop_distance_ = 1.0;
+    double       delta_d_       = 0.0;
+    double       timeout_       = 20.0;
+    rclcpp::Time start_time_;
+    double       smoothed_bearing_       = 0.0;
+    double       smoothed_delta_d_       = 0.0;
+    bool         smoothing_initialized_  = false;
+    static constexpr double LPF_ALPHA      = 0.90;   // ~0.95 s time constant @10 Hz
+    static constexpr double MAX_BEARING    = 0.25;   // rad
+};
+
+// 17. HoldPosition
+//     Continuously publishes ToPico(0, 0, last_target_depth, stop_bit=1) so
+//     pico_controller is always within its stale-input window and depth keeps
+//     tracking. Use it at the end of a sequence to prevent the AUV from drifting
+//     up once the BT goes idle.
+class HoldPosition : public BT::StatefulActionNode {
+public:
+    HoldPosition(const std::string& name, const BT::NodeConfig& config)
+        : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() {
+        return { BT::InputPort<double>("duration",
+                     "Seconds to hold; pass -1 to hold forever (BT never exits)") };
+    }
+    BT::NodeStatus onStart()   override;
+    BT::NodeStatus onRunning() override;
+    void           onHalted()  override;
+private:
+    double       duration_ = -1.0;
+    rclcpp::Time start_time_;
+};
+
 // 14. TrackObject
 //     Looks for an object and saves its map-frame Pose once found.
 class TrackObject : public BT::StatefulActionNode {
@@ -528,4 +670,7 @@ inline void registerAllNodes(BT::BehaviorTreeFactory& factory) {
     factory.registerNodeType<MoveStraight>("MoveStraight");
     factory.registerNodeType<Full360Scan>("Full360Scan");
     factory.registerNodeType<TrackObject>("TrackObject");
+    factory.registerNodeType<GoThroughObject>("GoThroughObject");
+    factory.registerNodeType<ApproachObject>("ApproachObject");
+    factory.registerNodeType<HoldPosition>("HoldPosition");
 }
