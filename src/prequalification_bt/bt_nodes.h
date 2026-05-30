@@ -1,3 +1,9 @@
+/**
+ * @file bt_nodes.h
+ * @brief Behavior Tree node declarations for the RoboSub pre-qualification mission.
+ * @license Apache-2.0
+ */
+
 #pragma once
 
 #include "behaviortree_cpp/behavior_tree.h"
@@ -5,24 +11,22 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
-#include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/imu.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <vision_msgs/msg/detection3_d_array.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
-#include <tf2_ros/transform_listener.h>
-#include <tf2_ros/buffer.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include "custom_interfaces/srv/plan_path.hpp"
 #include "custom_interfaces/msg/to_pico.hpp"
 
 #include <cmath>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <chrono>
 
-// ─── Waypoint type ────────────────────────────────────────────────────────────
+/**
+ * @brief Simple Pose structure for waypoint management.
+ */
 struct Pose {
     double x = 0.0, y = 0.0, z = 0.0, yaw = 0.0;
 };
@@ -39,65 +43,40 @@ template <> inline Pose convertFromString(StringView str) {
     p.yaw = convertFromString<double>(parts[3]);
     return p;
 }
-}  // namespace BT
+}
 
-// ─── Shared robot interface (stored on the blackboard) ────────────────────────
-//
-//  All BT nodes access sensors and actuators through this struct.
-//  Created once in main() and injected via:
-//      tree.rootBlackboard()->set("robot_context", ctx)
-//
+/**
+ * @brief Shared context for Behavior Tree nodes to access ROS 2 interfaces and sensor data.
+ */
 struct RobotContext {
     rclcpp::Node::SharedPtr node;
-
     std::mutex mtx;
 
-    // Latest sensor readings (updated by ROS2 callbacks)
-    nav_msgs::msg::Odometry::SharedPtr             latest_odom;
     sensor_msgs::msg::Imu::SharedPtr               latest_imu;
     double                                         latest_altimeter = 0.0;
+    double                                         target_depth = 0.0;
     vision_msgs::msg::Detection3DArray::SharedPtr  latest_detections;
 
-    bool odom_received      = false;
-    bool imu_received       = false;
-    bool altimeter_received = false;
+    bool imu_received  = false;
 
-    // Actuator publishers
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub;        // legacy direct path
-    rclcpp::Publisher<custom_interfaces::msg::ToPico>::SharedPtr to_pico_pub;  // preferred (goes through pico_controller PIDs)
+    rclcpp::Publisher<custom_interfaces::msg::ToPico>::SharedPtr pico_pub;
 
-    // Last commanded depth — retained so stopMotion() / stale ticks hold depth instead of dropping it.
-    double last_target_depth = 0.0;
-
-    // Service Client for Global Planner
-    rclcpp::Client<custom_interfaces::srv::PlanPath>::SharedPtr path_client;
-
-    // TF2 buffer and listener
-    std::shared_ptr<tf2_ros::Buffer> tf_buffer;
-    std::shared_ptr<tf2_ros::TransformListener> tf_listener;
-
-    // Subscriptions (kept alive here so they are not destroyed)
-    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr            odom_sub;
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr              imu_sub;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr             alt_sub;
     rclcpp::Subscription<vision_msgs::msg::Detection3DArray>::SharedPtr det_sub;
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    // Current AUV pose: position from /odom, yaw from /imu
+    /**
+     * @brief Retrieves the current pose estimated from sensors.
+     */
     Pose getCurrentPose() {
         std::lock_guard<std::mutex> g(mtx);
         Pose p;
-        if (latest_odom) {
-            p.x = latest_odom->pose.pose.position.x;
-            p.y = latest_odom->pose.pose.position.y;
-            p.z = latest_odom->pose.pose.position.z;
-        }
+        p.x = 0.0; p.y = 0.0;
+        p.z = latest_altimeter;
+
         if (latest_imu) {
-            tf2::Quaternion q(latest_imu->orientation.x,
-                              latest_imu->orientation.y,
-                              latest_imu->orientation.z,
-                              latest_imu->orientation.w);
+            tf2::Quaternion q(latest_imu->orientation.x, latest_imu->orientation.y,
+                              latest_imu->orientation.z, latest_imu->orientation.w);
             double roll, pitch, yaw;
             tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
             p.yaw = yaw;
@@ -105,50 +84,39 @@ struct RobotContext {
         return p;
     }
 
-    // Returns true when the named object is present in /detections_3d.
-    //   "GATE" matches: left_gate_pole | right_gate_pole
-    //   "POLE" matches: red_pole | white_pole
+    /**
+     * @brief Checks if a specific object is currently detected.
+     */
     bool isObjectSeen(const std::string& object) {
         std::lock_guard<std::mutex> g(mtx);
-        if (!latest_detections) {
-            RCLCPP_DEBUG_THROTTLE(node->get_logger(), *node->get_clock(), 5000, "isObjectSeen: No detections received yet.");
-            return false;
-        }
+        if (!latest_detections) return false;
         for (const auto& det : latest_detections->detections) {
             if (det.results.empty()) continue;
-            const auto& id = det.results[0].hypothesis.class_id;
-            
-            RCLCPP_INFO_THROTTLE(node->get_logger(), *node->get_clock(), 2000, 
-                                 "isObjectSeen: Checking [%s] against [%s]", id.c_str(), object.c_str());
+            const auto& hyp = det.results[0].hypothesis;
+            const auto& id = hyp.class_id;
+            const auto& score = hyp.score;
 
-            if (object == "GATE" &&
-                (id == "left_gate_pole" || id == "right_gate_pole" || id == "preq_gate")) return true;
-            if (object == "POLE" &&
-                (id == "red_pole"       || id == "white_pole"      || id == "preq_pole"))       return true;
-            if (object == "SHARK" && id == "shark")                   return true;
+            if (object == "GATE" && id == "preq_gate" && score >= 0.6) return true;
+            if (object == "POLE" && id == "preq_pole" && score >= 0.3) return true;
         }
         return false;
     }
 
-    // Fills (ox, oy, oz) with the object's 3-D position in the front camera
-    // optical frame produced by data_distance_node:
-    //   oz = depth (metres, forward)
-    //   ox = horizontal offset (right = positive)
-    //   oy = vertical offset   (down  = positive)
-    // Returns false when the object is not detected.
-    bool getObjectPosition(const std::string& object,
-                           double& ox, double& oy, double& oz) {
+    /**
+     * @brief Gets the 3D position of a detected object.
+     */
+    bool getObjectPosition(const std::string& object, double& ox, double& oy, double& oz) {
         std::lock_guard<std::mutex> g(mtx);
         if (!latest_detections) return false;
+
         for (const auto& det : latest_detections->detections) {
             if (det.results.empty()) continue;
-            const auto& id = det.results[0].hypothesis.class_id;
-            bool match = (object == "GATE" &&
-                          (id == "left_gate_pole" || id == "right_gate_pole" || id == "preq_gate")) ||
-                         (object == "POLE" &&
-                          (id == "red_pole" || id == "white_pole" || id == "preq_pole")) ||
-                         (object == "SHARK" && id == "shark");
-            if (match) {
+            const auto& hyp = det.results[0].hypothesis;
+            const auto& id = hyp.class_id;
+            const auto& score = hyp.score;
+
+            if (((object == "GATE" && id == "preq_gate" && score >= 0.6) ||
+                 (object == "POLE" && id == "preq_pole" && score >= 0.3))) {
                 ox = det.bbox.center.position.x;
                 oy = det.bbox.center.position.y;
                 oz = det.bbox.center.position.z;
@@ -158,519 +126,145 @@ struct RobotContext {
         return false;
     }
 
-    // New helper: transform camera-frame object position to map frame
-    bool getGlobalObjectPose(const std::string& object, Pose& out_pose) {
-        double ox, oy, oz;
-        rclcpp::Time stamp;
-        
-        {
-            std::lock_guard<std::mutex> g(mtx);
-            if (!getObjectPositionInternal(object, ox, oy, oz)) return false;
-            stamp = latest_detections->header.stamp;
-        }
-
-        try {
-            // Transform from camera optical frame to map
-            geometry_msgs::msg::PoseStamped cam_pose;
-            cam_pose.header.frame_id = "zed_camera_front_link_optical_frame";
-            cam_pose.header.stamp = stamp;
-            cam_pose.pose.position.x = ox;
-            cam_pose.pose.position.y = oy;
-            cam_pose.pose.position.z = oz;
-            cam_pose.pose.orientation.w = 1.0;
-
-            // Wait for transform to be available (use simulation time)
-            if (!tf_buffer->canTransform("map", cam_pose.header.frame_id, tf2_ros::fromMsg(stamp), std::chrono::milliseconds(200))) {
-                RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 1000, "Waiting for transform from %s to map (sim time %f)", cam_pose.header.frame_id.c_str(), stamp.seconds());
-                return false;
-            }
-
-            geometry_msgs::msg::PoseStamped map_pose = tf_buffer->transform(cam_pose, "map");
-            out_pose.x = map_pose.pose.position.x;
-            out_pose.y = map_pose.pose.position.y;
-            out_pose.z = map_pose.pose.position.z;
-            
-            Pose cur = getCurrentPose();
-            out_pose.yaw = cur.yaw; // Default to current heading
-            return true;
-        } catch (const tf2::TransformException& ex) {
-            RCLCPP_WARN_THROTTLE(node->get_logger(), *node->get_clock(), 2000, "TF error in getGlobalObjectPose: %s", ex.what());
-            return false;
-        }
-    }
-
-    // Internal version of getObjectPosition without mutex (to be called inside a lock)
-    bool getObjectPositionInternal(const std::string& object,
-                                   double& ox, double& oy, double& oz) {
-        if (!latest_detections) return false;
-        for (const auto& det : latest_detections->detections) {
-            if (det.results.empty()) continue;
-            const auto& id = det.results[0].hypothesis.class_id;
-            bool match = (object == "GATE" &&
-                          (id == "left_gate_pole" || id == "right_gate_pole" || id == "preq_gate")) ||
-                         (object == "POLE" &&
-                          (id == "red_pole" || id == "white_pole" || id == "preq_pole")) ||
-                         (object == "SHARK" && id == "shark");
-            if (match) {
-                ox = det.bbox.center.position.x;
-                oy = det.bbox.center.position.y;
-                oz = det.bbox.center.position.z;
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Publishes a 6-DOF velocity command directly to /cmd_vel (bypasses pico_controller).
-    // Kept for legacy nodes that have not been migrated to /to_pico.
-    void publishCmdVel(double surge, double sway, double heave,
-                       double roll_r, double pitch_r, double yaw_r) {
-        geometry_msgs::msg::Twist cmd;
-        cmd.linear.x  = surge;
-        cmd.linear.y  = sway;
-        cmd.linear.z  = heave;
-        cmd.angular.x = roll_r;
-        cmd.angular.y = pitch_r;
-        cmd.angular.z = yaw_r;
-        cmd_vel_pub->publish(cmd);
-    }
-
-    // Preferred command path: setpoints/errors go to pico_controller which closes the loops.
-    //   delta_yaw     yaw error    (rad)
-    //   delta_d       surge error  (m)
-    //   target_depth  abs depth setpt (m, positive-down)
-    //   stop_bit      1 = zero surge/sway/yaw; depth still tracks target_depth
-    void publishToPico(double delta_yaw, double delta_d,
-                       double target_depth, uint8_t stop_bit) {
+    /**
+     * @brief Publishes control setpoints to the Pico controller.
+     */
+    void publishToPico(float delta_yaw, float delta_d, float delta_s, float target_depth_val, uint8_t stop_bit) {
         custom_interfaces::msg::ToPico msg;
-        msg.delta_yaw    = static_cast<float>(delta_yaw);
-        msg.delta_d      = static_cast<float>(delta_d);
-        msg.target_depth = static_cast<float>(target_depth);
-        msg.stop_bit     = stop_bit;
-        last_target_depth = target_depth;
-        to_pico_pub->publish(msg);
+        msg.delta_yaw = delta_yaw;
+        msg.delta_d = delta_d;
+        msg.delta_s = delta_s;
+        msg.target_depth = target_depth_val;
+        msg.stop_bit = stop_bit;
+        pico_pub->publish(msg);
     }
 
-    // Hold the last commanded depth, kill surge/sway/yaw.
-    void stopMotion() { publishToPico(0.0, 0.0, last_target_depth, 1); }
-
-    // Latest altimeter reading (positive-down).
-    double getAltimeter() {
-        std::lock_guard<std::mutex> g(mtx);
-        return latest_altimeter;
+    /**
+     * @brief Commands the robot to stop all horizontal motion.
+     */
+    void stopMotion() { 
+        publishToPico(0.0f, 0.0f, 0.0f, (float)target_depth, 1); 
     }
 };
 
-// ─── Math utilities ───────────────────────────────────────────────────────────
-inline double clampVal(double v, double lo, double hi) {
-    return std::max(lo, std::min(hi, v));
-}
+// --- Math Utilities --------------------------------------------------------
+
+inline double clampVal(double v, double lo, double hi) { return std::max(lo, std::min(hi, v)); }
 inline double normalizeAngle(double a) {
     while (a >  M_PI) a -= 2.0 * M_PI;
     while (a < -M_PI) a += 2.0 * M_PI;
     return a;
 }
-inline double dist2D(double dx, double dy) {
-    return std::sqrt(dx * dx + dy * dy);
-}
 
-// ─── Node declarations ────────────────────────────────────────────────────────
+// --- Condition Nodes -------------------------------------------------------
 
-// 1. AllSystemsOK
-//    Condition that passes only once /odom and /imu have been received.
 class AllSystemsOK : public BT::ConditionNode {
 public:
-    AllSystemsOK(const std::string& name, const BT::NodeConfig& config)
-        : BT::ConditionNode(name, config) {}
+    AllSystemsOK(const std::string& name, const BT::NodeConfig& config) : BT::ConditionNode(name, config) {}
     static BT::PortsList providedPorts() { return {}; }
     BT::NodeStatus tick() override;
 };
 
-// 2. SaveToBlackboard
-//    Reads current pose from /odom + /imu and writes it to the
-//    blackboard entry named by the "key" output port.
-//    XML usage:  <Action ID="SaveToBlackboard" key="{T0}"/>
-class SaveToBlackboard : public BT::SyncActionNode {
-public:
-    SaveToBlackboard(const std::string& name, const BT::NodeConfig& config)
-        : BT::SyncActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::OutputPort<Pose>("key", "Blackboard key to store current pose") };
-    }
-    BT::NodeStatus tick() override;
-};
-
-// 3. DiveToDepth
-//    Publishes /to_pico with stop_bit=1 holding target_depth.
-//    Succeeds when |altimeter - target_depth| < depth_tolerance_.
-class DiveToDepth : public BT::StatefulActionNode {
-public:
-    DiveToDepth(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<double>("target_depth", "Target depth in metres (positive-down)") };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    double target_depth_    = 0.0;
-    double depth_tolerance_ = 0.15;
-};
-
-// 4. IsObjectSeen
-//    Queries /detections_3d for "GATE" or "POLE".
 class IsObjectSeen : public BT::ConditionNode {
 public:
-    IsObjectSeen(const std::string& name, const BT::NodeConfig& config)
-        : BT::ConditionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<std::string>("object", "GATE or POLE") };
-    }
+    IsObjectSeen(const std::string& name, const BT::NodeConfig& config) : BT::ConditionNode(name, config) {}
+    static BT::PortsList providedPorts() { return { BT::InputPort<std::string>("object") }; }
     BT::NodeStatus tick() override;
 };
 
-// 5. Do360Turn
-//    Two phases, both via /to_pico (depth held by pico_controller throughout):
-//      SEARCHING : spin at a constant delta_yaw setpoint until the target object is seen.
-//                  Returns FAILURE if a full 360° passes without a detection.
-//      ALIGNING  : feed the bearing-to-object as delta_yaw so the yaw PID centres the
-//                  object horizontally in the camera frame. SUCCESS when |bearing|
-//                  is within ALIGN_TOL.
+// --- Action Nodes ----------------------------------------------------------
+
+class DiveToDepth : public BT::StatefulActionNode {
+public:
+    DiveToDepth(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() { return { BT::InputPort<double>("target_depth"), BT::InputPort<double>("staystill") }; }
+    BT::NodeStatus onStart() override;
+    BT::NodeStatus onRunning() override;
+    void onHalted() override;
+private:
+    double target_z_ = 0.0, depth_tolerance_ = 0.15;
+    double staystill_ = 0.0;
+    std::chrono::steady_clock::time_point stay_still_start_;
+    bool in_stay_still_ = false;
+};
+
 class Do360Turn : public BT::StatefulActionNode {
 public:
-    Do360Turn(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<std::string>("success_when_seen",
-                     "Return SUCCESS when this object appears: GATE or POLE") };
-    }
-    BT::NodeStatus onStart()   override;
+    Do360Turn(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() { return { BT::InputPort<std::string>("success_when_seen") }; }
+    BT::NodeStatus onStart() override;
     BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
+    void onHalted() override;
 private:
-    enum class Phase { SEARCHING, ALIGNING };
-    Phase       phase_           = Phase::SEARCHING;
     std::string target_object_;
-    double      prev_yaw_        = 0.0;
-    double      accumulated_yaw_ = 0.0;
-    // Constant yaw-error setpoint sent to pico_controller during SEARCHING — large
-    // enough to drive the yaw PID well above noise and produce a steady spin.
-    // Sign = direction (positive = CCW per ROS REP-103).
-    static constexpr double DELTA_YAW_SETPOINT = 0.3;
-    static constexpr double FULL_CIRCLE        = 2.0 * M_PI;
-    // Alignment tolerance: |bearing-to-object| must be under this for SUCCESS.
-    // 0.05 rad ≈ 3° — "almost in camera yaw centre".
-    static constexpr double ALIGN_TOL          = 0.05;
+    double prev_yaw_ = 0.0, accumulated_yaw_ = 0.0;
 };
 
-// 6. NavigateTo
-//    P-controller: turns to face target, surges forward, controls depth.
-//    Returns SUCCESS when within arrival tolerance.
+class DriveThruGate : public BT::StatefulActionNode {
+public:
+    DriveThruGate(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() {
+        return { BT::InputPort<double>("gate_depth"), BT::InputPort<double>("staystill"), BT::OutputPort<Pose>("entry_pose") };
+    }
+    BT::NodeStatus onStart() override;
+    BT::NodeStatus onRunning() override;
+    void onHalted() override;
+private:
+    enum class Phase { ALIGN, DRIVE, STAY_STILL };
+    Phase phase_ = Phase::ALIGN;
+    Pose entry_pose_;
+    double gate_depth_ = 6.0, start_time_ = 0.0, align_start_time_ = 0.0, gate_drive_time_ = 0.0, gate_lost_time_ = 0.0;
+    bool align_started_ = false, gate_lost_started_ = false;
+    double staystill_ = 0.0;
+    std::chrono::steady_clock::time_point stay_still_start_;
+};
+
 class NavigateTo : public BT::StatefulActionNode {
 public:
-    NavigateTo(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
+    NavigateTo(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
     static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<Pose>("from", "Start waypoint (informational)"),
-            BT::InputPort<Pose>("to",   "Target waypoint")
-        };
+        return { BT::InputPort<Pose>("to"), BT::InputPort<bool>("reverse"), BT::InputPort<double>("duration") };
     }
-    BT::NodeStatus onStart()   override;
+    BT::NodeStatus onStart() override;
     BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
+    void onHalted() override;
 private:
     Pose target_;
-    static constexpr double ARRIVE_XY = 0.4;
-    static constexpr double ARRIVE_Z  = 0.3;
-    static constexpr double K_YAW     = 3.5;
-    static constexpr double K_SURGE   = 2.0;
-    static constexpr double K_DEPTH   = 2.5;
-    static constexpr double MAX_SURGE = 5.0;
-    static constexpr double MAX_YAW_R = 2.0;
-    static constexpr double MAX_HEAVE = 3.0;
-    static constexpr double ALIGN_RAD = 0.4;   // rad — must align before surging
+    double start_time_ = 0.0, duration_ = 15.0;
+    bool surge_started_ = false;
 };
 
-// 7. NavigateAround
-//    Three-phase orbit controller around a detected object:
-//
-//    APPROACH: surge toward the object until depth ≈ threshold
-//    ORBIT:    rotate at constant yaw rate while holding radial distance;
-//              completes after a full 360° accumulation
-//    RETURN:   navigate back to return_point
-class NavigateAround : public BT::StatefulActionNode {
+class OrbitPole : public BT::StatefulActionNode {
 public:
-    NavigateAround(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
+    OrbitPole(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
     static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<std::string>("object",       "Object to orbit: POLE"),
-            BT::InputPort<Pose>       ("return_point", "Pose to return to after orbit"),
-            BT::InputPort<double>     ("threshold",    "Orbit radius in metres")
-        };
+        return { BT::InputPort<std::string>("object"), 
+                 BT::InputPort<double>("threshold"), 
+                 BT::InputPort<double>("staystill"),
+                 BT::InputPort<double>("surge_duration") };
     }
-    BT::NodeStatus onStart()   override;
+    BT::NodeStatus onStart() override;
     BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
+    void onHalted() override;
 private:
-    enum class Phase { APPROACH, ORBIT, RETURN };
-    Phase       phase_         = Phase::APPROACH;
+    enum class Phase { ALIGN, APPROACH, TURN, SURGE, STAY_STILL };
+    Phase phase_ = Phase::ALIGN;
     std::string target_object_;
-    Pose        return_point_;
-    double      threshold_     = 1.5;
-    double      prev_yaw_      = 0.0;
-    double      orbit_yaw_acc_ = 0.0;
-    static constexpr double ORBIT_RATE   = 0.35;
-    static constexpr double K_RADIAL     = 2.0;
-    static constexpr double K_CENTER     = 2.5;
-    static constexpr double APPROACH_TOL = 0.3;
-    static constexpr double RETURN_TOL   = 0.4;
+    double threshold_ = 1.5, target_yaw_ = 0.0, locked_yaw_ = 0.0, start_time_ = 0.0, surge_duration_ = 4.0;
+    int steps_completed_ = 0;
+    double staystill_ = 0.0;
+    std::chrono::steady_clock::time_point stay_still_start_;
 };
 
-// 8. NavigateBelowObject
-//    Targets a point directly below a detected object.
-class NavigateBelowObject : public BT::StatefulActionNode {
-public:
-    NavigateBelowObject(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<std::string>("object", "Object to pass below (e.g. SHARK)"),
-            BT::InputPort<double>("vertical_offset", "Distance below object in metres (e.g. 0.5)")
-        };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    std::string target_object_;
-    double      offset_ = 0.5;
-    static constexpr double K_CENTER   = 2.5;
-    static constexpr double K_SURGE    = 1.5;
-    static constexpr double K_HEAVE    = 2.0;
-    static constexpr double ARRIVE_XYZ = 0.5;
-};
-
-// 9. PlanPathTo
-//    Calls the /plan_path service to generate a trajectory to a Pose.
-class PlanPathTo : public BT::StatefulActionNode {
-public:
-    PlanPathTo(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<Pose>("target", "Target pose in map frame") };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    rclcpp::Client<custom_interfaces::srv::PlanPath>::SharedFuture future_;
-    bool request_sent_ = false;
-};
-
-// 10. WaitUntilReached
-//     Returns SUCCESS when current pose is within tolerance of target pose.
-class WaitUntilReached : public BT::ConditionNode {
-public:
-    WaitUntilReached(const std::string& name, const BT::NodeConfig& config)
-        : BT::ConditionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { 
-            BT::InputPort<Pose>("target", "Target pose"),
-            BT::InputPort<double>("tolerance", "Arrival tolerance in metres")
-        };
-    }
-    BT::NodeStatus tick() override;
-};
-
-// 11. CalculateObjectTarget
-//     Calculates a global Pose relative to a reference object pose.
-class CalculateObjectTarget : public BT::SyncActionNode {
-public:
-    CalculateObjectTarget(const std::string& name, const BT::NodeConfig& config)
-        : BT::SyncActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<Pose>("object_pose", "Reference global pose of the object"),
-            BT::InputPort<double>("offset_forward", "Forward offset in metres"),
-            BT::InputPort<double>("offset_lateral", "Lateral offset in metres (left positive)"),
-            BT::InputPort<double>("offset_vertical", "Vertical offset in metres (up positive)"),
-            BT::OutputPort<Pose>("target", "Calculated global pose")
-        };
-    }
-    BT::NodeStatus tick() override;
-};
-
-// 12. MoveStraight
-//     Commands constant surge velocity.
-class MoveStraight : public BT::StatefulActionNode {
-public:
-    MoveStraight(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<double>("speed", "Surge speed m/s") };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-};
-
-// 13. Full360Scan
-//     Spins a full 360 degrees for mapping/SLAM purposes.
-//     Always returns SUCCESS after the full rotation.
-class Full360Scan : public BT::StatefulActionNode {
-public:
-    Full360Scan(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() { return {}; }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    double prev_yaw_        = 0.0;
-    double accumulated_yaw_ = 0.0;
-    static constexpr double TURN_RATE   = 0.4;
-    static constexpr double FULL_CIRCLE = 2.0 * M_PI;
-};
-
-// 15. GoThroughObject
-//     Approach an object using camera-relative tracking, then commit forward to pass it.
-//
-//     TRACKING:    delta_yaw = -atan2(ox, oz)  (lock yaw onto centre)
-//                  delta_d   = oz - CLOSE_RANGE (drive surge toward object)
-//     COMMITTING:  oz dropped below CLOSE_RANGE OR detection lost while tracking
-//                  → surge blindly forward at COMMIT_DELTA_D for COMMIT_DURATION seconds.
-//
-//     Depth is unchanged — pico_controller continues holding the last target_depth.
-class GoThroughObject : public BT::StatefulActionNode {
-public:
-    GoThroughObject(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<std::string>("object", "Target object: GATE or POLE") };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    enum class Phase { TRACKING, COMMITTING };
-    Phase        phase_         = Phase::TRACKING;
-    std::string  target_object_;
-    rclcpp::Time commit_start_;
-    // CLOSE_RANGE: oz at which we hand off from tracking to blind-surge.
-    static constexpr double CLOSE_RANGE     = 0.8;
-    // COMMIT_DURATION: total blind-surge time — long enough for the tail of the
-    // AUV to clear the gate, not just the front camera.
-    static constexpr double COMMIT_DURATION = 6.0;
-    // COMMIT_DELTA_D: synthetic surge error fed during commit. Sized to saturate
-    // the surge PID (kp_surge·err ≥ surge_limit), giving max push.
-    static constexpr double COMMIT_DELTA_D  = 30.0;
-    // Setpoint smoothing: low-pass-filtered toward the raw bearing / delta_d.
-    // Kills D-term spikes from noisy camera measurements and ramps the setpoint
-    // gradually across phase transitions so the AUV doesn't lurch.
-    //   τ = -dt/ln(α) at 10 Hz tick → α=0.90 → τ ≈ 0.95 s (smooth approach)
-    //                                  α=0.70 → τ ≈ 0.28 s (faster commit ramp)
-    static constexpr double LPF_ALPHA_TRACK  = 0.90;
-    static constexpr double LPF_ALPHA_COMMIT = 0.70;
-    static constexpr double MAX_TRACK_BEARING = 0.25;  // rad
-    static constexpr double MAX_TRACK_DELTA_D = 0.4;   // m of synthetic error
-
-    // Smoothed setpoint state (between ticks).
-    double smoothed_bearing_       = 0.0;
-    double smoothed_delta_d_       = 0.0;
-    bool   smoothing_initialized_  = false;
-};
-
-// 16. ApproachObject
-//     Surges forward while yaw-locking onto the target object until it is within
-//     `stop_distance` metres (camera-frame oz). Setpoints are LPF-smoothed so
-//     pico_controller never sees a step input. Depth held from previous action.
-//     Returns FAILURE on timeout.
-class ApproachObject : public BT::StatefulActionNode {
-public:
-    ApproachObject(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<std::string>("object",        "Target object: POLE or GATE"),
-            BT::InputPort<double>     ("stop_distance", "Stop when object's oz < this (m)"),
-            BT::InputPort<double>     ("delta_d",       "Surge error setpoint (m)"),
-            BT::InputPort<double>     ("timeout",       "Seconds before giving up (FAILURE)")
-        };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    std::string  target_object_;
-    double       stop_distance_ = 1.0;
-    double       delta_d_       = 0.0;
-    double       timeout_       = 20.0;
-    rclcpp::Time start_time_;
-    double       smoothed_bearing_       = 0.0;
-    double       smoothed_delta_d_       = 0.0;
-    bool         smoothing_initialized_  = false;
-    static constexpr double LPF_ALPHA      = 0.90;   // ~0.95 s time constant @10 Hz
-    static constexpr double MAX_BEARING    = 0.25;   // rad
-};
-
-// 17. HoldPosition
-//     Continuously publishes ToPico(0, 0, last_target_depth, stop_bit=1) so
-//     pico_controller is always within its stale-input window and depth keeps
-//     tracking. Use it at the end of a sequence to prevent the AUV from drifting
-//     up once the BT goes idle.
-class HoldPosition : public BT::StatefulActionNode {
-public:
-    HoldPosition(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return { BT::InputPort<double>("duration",
-                     "Seconds to hold; pass -1 to hold forever (BT never exits)") };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-private:
-    double       duration_ = -1.0;
-    rclcpp::Time start_time_;
-};
-
-// 14. TrackObject
-//     Looks for an object and saves its map-frame Pose once found.
-class TrackObject : public BT::StatefulActionNode {
-public:
-    TrackObject(const std::string& name, const BT::NodeConfig& config)
-        : BT::StatefulActionNode(name, config) {}
-    static BT::PortsList providedPorts() {
-        return {
-            BT::InputPort<std::string>("object", "Object to find"),
-            BT::OutputPort<Pose>("pose", "Global pose of the object")
-        };
-    }
-    BT::NodeStatus onStart()   override;
-    BT::NodeStatus onRunning() override;
-    void           onHalted()  override;
-};
-
-// ─── Factory registration ──────────────────────────────────────────────────────
+/**
+ * @brief Registration helper for the Behavior Tree factory.
+ */
 inline void registerAllNodes(BT::BehaviorTreeFactory& factory) {
     factory.registerNodeType<AllSystemsOK>("AllSystemsOK");
-    factory.registerNodeType<SaveToBlackboard>("SaveToBlackboard");
     factory.registerNodeType<DiveToDepth>("DiveToDepth");
     factory.registerNodeType<IsObjectSeen>("IsObjectSeen");
     factory.registerNodeType<Do360Turn>("Do360Turn");
+    factory.registerNodeType<DriveThruGate>("DriveThruGate");
     factory.registerNodeType<NavigateTo>("NavigateTo");
-    factory.registerNodeType<NavigateAround>("NavigateAround");
-    factory.registerNodeType<NavigateBelowObject>("NavigateBelowObject");
-    factory.registerNodeType<PlanPathTo>("PlanPathTo");
-    factory.registerNodeType<WaitUntilReached>("WaitUntilReached");
-    factory.registerNodeType<CalculateObjectTarget>("CalculateObjectTarget");
-    factory.registerNodeType<MoveStraight>("MoveStraight");
-    factory.registerNodeType<Full360Scan>("Full360Scan");
-    factory.registerNodeType<TrackObject>("TrackObject");
-    factory.registerNodeType<GoThroughObject>("GoThroughObject");
-    factory.registerNodeType<ApproachObject>("ApproachObject");
-    factory.registerNodeType<HoldPosition>("HoldPosition");
+    factory.registerNodeType<OrbitPole>("OrbitPole");
 }
