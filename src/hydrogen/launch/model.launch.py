@@ -20,6 +20,7 @@ def generate_launch_description():
     
     worlds_path = os.path.join(pkg_share, 'worlds')
     model_path = os.path.join(pkg_share, 'model')
+    plugins_path = os.path.join(pkg_share, 'plugins')
 
     install_dir = os.path.dirname(pkg_share)
 
@@ -40,6 +41,16 @@ def generate_launch_description():
     set_gz_resource_path = AppendEnvironmentVariable(
         name='GZ_SIM_RESOURCE_PATH',
         value=os.pathsep.join([worlds_path, install_dir])
+    )
+
+    set_ign_plugin_path = AppendEnvironmentVariable(
+        name='IGN_GAZEBO_SYSTEM_PLUGIN_PATH',
+        value=plugins_path
+    )
+
+    set_gz_plugin_path = AppendEnvironmentVariable(
+        name='GZ_SIM_SYSTEM_PLUGIN_PATH',
+        value=plugins_path
     )
 
     # ---------------- Robot description ----------------
@@ -141,6 +152,8 @@ def generate_launch_description():
 
     ld.add_action(set_ign_resource_path)
     ld.add_action(set_gz_resource_path)
+    ld.add_action(set_ign_plugin_path)
+    ld.add_action(set_gz_plugin_path)
     ld.add_action(gazebo_launch)
     ld.add_action(robot_state_publisher)
     ld.add_action(spawn_robot)

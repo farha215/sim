@@ -69,6 +69,7 @@ setup(
             'dshot_node = hydrogen.thruster_Dshot_publisher:main',
             'yolo_node = hydrogen.yolo_node:main',
             'data_distance_node = hydrogen.data_distance_node:main',
+            'vision_fusion_node = hydrogen.vision_fusion_node:main',
         ],
     },
 )
