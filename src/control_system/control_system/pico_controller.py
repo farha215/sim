@@ -38,9 +38,9 @@ class PicoController(Node):
         self.declare_parameter('ki_depth', 0.00)
         self.declare_parameter('kd_depth', 0.00)
 
-        self.declare_parameter('kp_yaw', 2.5)
-        self.declare_parameter('ki_yaw', 0.02)
-        self.declare_parameter('kd_yaw', 0.5)
+        self.declare_parameter('kp_yaw', 4.0)
+        self.declare_parameter('ki_yaw', 0.0)
+        self.declare_parameter('kd_yaw', 1.2)
 
         # Output saturation (N or N·m at /cmd_vel level — matches allocation_matrix scale)
         self.declare_parameter('surge_limit', 40.0)
