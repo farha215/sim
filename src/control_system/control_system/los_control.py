@@ -262,15 +262,15 @@ class VFGController(Node):
             dy = target[1] - py
             dz = target[2] - pz
             
-            # Transform to body frame (surge/sway)
+            # Transform to body frame (surge/lateral)
             cos_y, sin_y = math.cos(self.yaw), math.sin(self.yaw)
             error_surge =  dx * cos_y + dy * sin_y
-            error_sway  = -dx * sin_y + dy * cos_y
+            error_lateral  = -dx * sin_y + dy * cos_y
             
-            # Surge/Sway command (P-velocity with inner loop)
+            # Surge/Lateral command (P-velocity with inner loop)
             # Use k_u as a general linear gain
             surge_cmd = self.k_u * (0.8 * error_surge - self.u)
-            sway_cmd  = self.k_u * (0.8 * error_sway) # No lateral speed feedback in odom?
+            lateral_cmd  = self.k_u * (0.8 * error_lateral) # No lateral speed feedback in odom?
             
             # Depth / Heave
             # Use k_depth for heave correction
@@ -280,7 +280,7 @@ class VFGController(Node):
             # (or just hold current heading if no better info)
             cmd = Twist()
             cmd.linear.x = float(surge_cmd)
-            cmd.linear.y = float(sway_cmd)
+            cmd.linear.y = float(lateral_cmd)
             cmd.linear.z = float(heave_cmd)
             cmd.angular.z = 0.0 # Hold heading
             self.cmd_pub.publish(cmd)

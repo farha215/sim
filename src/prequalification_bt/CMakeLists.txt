@@ -8,14 +8,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(ament_cmake      REQUIRED)
 find_package(rclcpp           REQUIRED)
 find_package(geometry_msgs    REQUIRED)
-find_package(nav_msgs         REQUIRED)
 find_package(sensor_msgs      REQUIRED)
 find_package(std_msgs         REQUIRED)
 find_package(vision_msgs      REQUIRED)
 find_package(custom_interfaces REQUIRED)
 find_package(tf2              REQUIRED)
-find_package(tf2_ros          REQUIRED)
-find_package(tf2_geometry_msgs REQUIRED)
 find_package(ament_index_cpp  REQUIRED)
 
 # ── BehaviorTree.CPP (installed via apt or manually) ─────────────────────────
@@ -34,16 +31,16 @@ target_include_directories(prequalification PRIVATE
 ament_target_dependencies(prequalification
     rclcpp
     geometry_msgs
-    nav_msgs
     sensor_msgs
     std_msgs
     vision_msgs
     custom_interfaces
     tf2
-    tf2_ros
-    tf2_geometry_msgs
     ament_index_cpp
-    behaviortree_cpp
+)
+
+target_link_libraries(prequalification
+    behaviortree_cpp::behaviortree_cpp
 )
 
 # ── Install ───────────────────────────────────────────────────────────────────
@@ -52,7 +49,8 @@ install(TARGETS prequalification
 )
 
 # XML tree file installed to share/ so ament_index_cpp can locate it at runtime
-install(FILES prequalification.xml
+install(FILES 
+    prequalification.xml
     DESTINATION share/${PROJECT_NAME}
 )
 

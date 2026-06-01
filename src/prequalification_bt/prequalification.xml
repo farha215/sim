@@ -1,34 +1,65 @@
-<root BTCPP_format="4">
+<root BTCPP_format="4" main_tree_to_execute="PreQualification_Task">
 
     <BehaviorTree ID="PreQualification_Task">
-        <Sequence>
-            <!-- 1. System Check -->
-            <Condition ID="AllSystemsOK" name="all_systems_check"/>
+        <Sequence name="main_mission">
+            <!-- 0. SYSTEMS CHECK -->
+            <AllSystemsOK name="check_systems"/>
 
-            <!-- 2. Dive to operating depth (positive-down, metres) -->
-            <Action ID="DiveToDepth" name="dive_to_depth"
-                    target_depth="1.5"/>
+            <!-- 1. INITIALIZE -->
+            <DiveToDepth target_depth="1.5" staystill="2.0"/>
 
-            <!-- 3. Spin until the gate is in view, then stop facing it (depth held). -->
-            <Action ID="Do360Turn" name="search_for_gate"
-                    success_when_seen="GATE"/>
+            <!-- 2. GATE MISSION -->
+            <Fallback name="find_gate">
+                <IsObjectSeen object="GATE"/>
+                <Do360Turn success_when_seen="GATE"/>
+            </Fallback>
+            <DriveThruGate gate_depth="6.0" entry_pose="{T1}" staystill="3.0"/>
 
-            <!-- 4. Lock yaw onto the gate, surge in, then commit through. -->
-            <Action ID="GoThroughObject" name="go_through_gate"
-                    object="GATE"/>
-
-            <!-- 5. After the gate, lock onto the pole and approach until within 1 m. -->
-            <Action ID="ApproachObject" name="approach_pole"
-                    object="POLE"
-                    stop_distance="1.0"
-                    delta_d="1.0"
-                    timeout="20.0"/>
-
-            <!-- 6. Sit at the pole and hold depth so the AUV doesn't drift up. -->
-            <Action ID="HoldPosition" name="hold_at_pole"
-                    duration="-1.0"/>
-
+            <!-- 3. POLE MISSION -->
+            <Fallback name="find_pole">
+                <IsObjectSeen object="POLE"/>
+                <Do360Turn success_when_seen="POLE"/>
+            </Fallback>
+            <OrbitPole object="POLE" threshold="1.5" staystill="3.0" surge_duration="2.5"/>
+            
+            <!-- 4. RETURN HOME -->
+            <NavigateTo to="{T1}" duration="10.0" reverse="true"/>
+            <Fallback name="find_gate_home">
+                <IsObjectSeen object="GATE"/>
+                <Do360Turn success_when_seen="GATE"/>
+            </Fallback>
+            <DriveThruGate gate_depth="4.0" staystill="3.0"/>
         </Sequence>
     </BehaviorTree>
+
+    <TreeNodesModel>
+        <Condition ID="AllSystemsOK"/>
+        <Condition ID="IsObjectSeen">
+            <input_port name="object" type="std::string">GATE or POLE</input_port>
+        </Condition>
+        <Action ID="DiveToDepth">
+            <input_port name="target_depth" type="double">Depth to dive to</input_port>
+            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
+        </Action>
+        <Action ID="Do360Turn">
+            <input_port name="success_when_seen" type="std::string">Stop when this is seen</input_port>
+        </Action>
+        <Action ID="DriveThruGate">
+            <input_port name="gate_depth" type="double">Distance to drive after gate</input_port>
+            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
+            <output_port name="entry_pose" type="Pose">Saved pose for return</output_port>
+        </Action>
+        <Action ID="OrbitPole">
+            <input_port name="object" type="std::string">Object to orbit</input_port>
+            <input_port name="threshold" type="double">Orbit radius</input_port>
+            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
+            <input_port name="surge_duration" type="double" default="4.0">Time to surge after tangent</input_port>
+        </Action>
+        <Action ID="NavigateTo">
+            <input_port name="to" type="Pose">Target pose</input_port>
+            <input_port name="duration" type="double">Time to surge</input_port>
+            <input_port name="reverse" type="bool" default="false">Flip heading by 180 deg</input_port>
+        </Action>
+    </TreeNodesModel>
 
 </root>

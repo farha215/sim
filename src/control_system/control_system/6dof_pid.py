@@ -101,7 +101,7 @@ class AdaptiveLosController(Node):
         yaw = self.current[5]
         ex, ey = error[0], error[1]
         error[0] =  math.cos(yaw)*ex + math.sin(yaw)*ey
-        error[1] = 0.0 # Force zero sway for stability
+        error[1] = 0.0 # Force zero lateral movement for stability
 
         # Standard PID calculation
         self.integral += error * self.dt

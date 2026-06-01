@@ -41,21 +41,21 @@ class GamepadCmdVel(Node):
 
         # Axes
         surge  = -self.joy.get_axis(1)   # forward/back
-        sway   =  self.joy.get_axis(0)   # left/right
+        lateral   =  self.joy.get_axis(0)   # left/right
         heave  = -self.joy.get_axis(3)   # up/down
         yaw    =  self.joy.get_axis(2)   # rotation
 
-        return surge, sway, heave, yaw
+        return surge, lateral, heave, yaw
 
     # ================= Publish CMD VEL =================
     def publish_cmd(self):
-        surge, sway, heave, yaw = self.read_gamepad()
+        surge, lateral, heave, yaw = self.read_gamepad()
 
         msg = Twist()
 
         # Linear velocities
         msg.linear.x = clamp(surge * self.linear_scale, -100.0, 100.0)
-        msg.linear.y = clamp(sway  * self.linear_scale, -100.0, 100.0)
+        msg.linear.y = clamp(lateral  * self.linear_scale, -100.0, 100.0)
         msg.linear.z = clamp(heave * self.linear_scale, -100.0, 100.0)
 
         # Angular velocities

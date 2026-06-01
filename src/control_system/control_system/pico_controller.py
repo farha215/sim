@@ -16,7 +16,7 @@ class PicoController(Node):
           delta_yaw     yaw error    (rad)   -> angular.z
           delta_d       surge error  (m)     -> linear.x
           target_depth  depth setpt  (m, +down)
-          stop_bit      uint8: 1 zeroes surge/sway/yaw, depth keeps tracking
+          stop_bit      uint8: 1 zeroes surge/lateral/yaw, depth keeps tracking
 
       /altimeter (std_msgs/Float64)  positive-down depth feedback
 
@@ -63,12 +63,9 @@ class PicoController(Node):
         self.depth_meas = 0.0
         self.last_setpoint_time = self.get_clock().now()
 
-        self.i_surge = 0.0
-        self.i_depth = 0.0
-        self.i_yaw = 0.0
-        self.prev_e_surge = 0.0
-        self.prev_e_depth = 0.0
-        self.prev_e_yaw = 0.0
+        # PID Accumulators
+        self.i_surge = self.i_depth = self.i_yaw = 0.0
+        self.prev_e_surge = self.prev_e_depth = self.prev_e_yaw = 0.0
 
         # I/O
         self.create_subscription(ToPico, '/to_pico', self.on_to_pico, 10)
@@ -132,7 +129,7 @@ class PicoController(Node):
                 self.get_parameter('kp_surge').value,
                 self.get_parameter('ki_surge').value,
                 self.get_parameter('kd_surge').value,
-                i_clamp,
+                i_clamp
             )
             u_yaw, self.i_yaw, self.prev_e_yaw = self._pid(
                 self.delta_yaw, self.i_yaw, self.prev_e_yaw,
@@ -141,16 +138,16 @@ class PicoController(Node):
                 self.get_parameter('kd_yaw').value,
                 i_clamp,
             )
-            s_lim = self.get_parameter('surge_limit').value
-            y_lim = self.get_parameter('yaw_limit').value
+            
+            s_lim, y_lim = (self.get_parameter('surge_limit').value,
+                            self.get_parameter('yaw_limit').value)
+                                    
             cmd.linear.x = float(max(-s_lim, min(s_lim, u_surge)))
+            cmd.linear.y = 0.0 # Force zero lateral movement (Under-actuated)
             cmd.angular.z = float(max(-y_lim, min(y_lim, u_yaw)))
         else:
-            # Hold station — freeze I-terms and prev errors so the next active tick starts clean.
-            self.i_surge = 0.0
-            self.i_yaw = 0.0
-            self.prev_e_surge = 0.0
-            self.prev_e_yaw = 0.0
+            self.i_surge = self.i_yaw = 0.0
+            self.prev_e_surge = self.prev_e_yaw = 0.0
 
         self.cmd_pub.publish(cmd)
 
