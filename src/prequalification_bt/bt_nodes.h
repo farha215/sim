@@ -129,11 +129,10 @@ struct RobotContext {
     /**
      * @brief Publishes control setpoints to the Pico controller.
      */
-    void publishToPico(float delta_yaw, float delta_d, float delta_s, float target_depth_val, uint8_t stop_bit) {
+    void publishToPico(float delta_yaw, float delta_d, float target_depth_val, uint8_t stop_bit) {
         custom_interfaces::msg::ToPico msg;
         msg.delta_yaw = delta_yaw;
         msg.delta_d = delta_d;
-        msg.delta_s = delta_s;
         msg.target_depth = target_depth_val;
         msg.stop_bit = stop_bit;
         pico_pub->publish(msg);
@@ -143,7 +142,7 @@ struct RobotContext {
      * @brief Commands the robot to stop all horizontal motion.
      */
     void stopMotion() { 
-        publishToPico(0.0f, 0.0f, 0.0f, (float)target_depth, 1); 
+        publishToPico(0.0f, 0.0f, (float)target_depth, 1); 
     }
 };
 

@@ -45,7 +45,7 @@ BT::NodeStatus DiveToDepth::onStart() {
     ctx->target_depth = target_z_;
     RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Diving to z = %.2f m", target_z_);
     
-    ctx->publishToPico(0.0f, 0.0f, 0.0f, (float)target_z_, 0);
+    ctx->publishToPico(0.0f, 0.0f, (float)target_z_, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -74,7 +74,7 @@ BT::NodeStatus DiveToDepth::onRunning() {
         return BT::NodeStatus::SUCCESS;
     }
 
-    ctx->publishToPico(0.0f, 0.0f, 0.0f, (float)target_z_, 0);
+    ctx->publishToPico(0.0f, 0.0f, (float)target_z_, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -106,7 +106,7 @@ BT::NodeStatus Do360Turn::onStart() {
     accumulated_yaw_ = 0.0;
 
     RCLCPP_INFO(ctx->node->get_logger(), "[Do360Turn] Searching for %s...", target_object_.c_str());
-    ctx->publishToPico(0.5f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+    ctx->publishToPico(0.5f, 0.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -130,7 +130,7 @@ BT::NodeStatus Do360Turn::onRunning() {
         return BT::NodeStatus::FAILURE;
     }
 
-    ctx->publishToPico(0.5f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+    ctx->publishToPico(0.5f, 0.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -169,7 +169,7 @@ BT::NodeStatus DriveThruGate::onRunning() {
 
     if (phase_ == Phase::ALIGN) {
         if (!gate_seen) {
-            ctx->publishToPico(0.3f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico(0.3f, 0.0f, (float)ctx->target_depth, 0);
             align_started_ = false;
             return BT::NodeStatus::RUNNING;
         }
@@ -192,7 +192,7 @@ BT::NodeStatus DriveThruGate::onRunning() {
             }
         } else {
             align_started_ = false;
-            ctx->publishToPico(-(float)norm_x * 0.8f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico(-(float)norm_x * 0.8f, 0.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -236,7 +236,7 @@ BT::NodeStatus DriveThruGate::onRunning() {
     }
 
     double yaw_err = normalizeAngle(entry_pose_.yaw - ctx->getCurrentPose().yaw);
-    ctx->publishToPico((float)yaw_err, 10.0f, 0.0f, (float)ctx->target_depth, 0);
+    ctx->publishToPico((float)yaw_err, 10.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -271,7 +271,7 @@ BT::NodeStatus NavigateTo::onRunning() {
             surge_started_ = true;
             RCLCPP_INFO(ctx->node->get_logger(), "[NavigateTo] Aligned. Starting timed surge...");
         } else {
-            ctx->publishToPico((float)yaw_err * 2.0f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico((float)yaw_err * 2.0f, 0.0f, (float)ctx->target_depth, 0);
             return BT::NodeStatus::RUNNING;
         }
     }
@@ -281,7 +281,7 @@ BT::NodeStatus NavigateTo::onRunning() {
         return BT::NodeStatus::SUCCESS;
     }
 
-    ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, 0.0f, (float)ctx->target_depth, 0);
+    ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
@@ -334,7 +334,7 @@ BT::NodeStatus OrbitPole::onRunning() {
 
     if (phase_ == Phase::ALIGN) {
         if (!seen) {
-            ctx->publishToPico(0.4f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico(0.4f, 0.0f, (float)ctx->target_depth, 0);
             return BT::NodeStatus::RUNNING;
         }
         double norm_x = ox / std::max(oz, 0.5);
@@ -343,7 +343,7 @@ BT::NodeStatus OrbitPole::onRunning() {
             locked_yaw_ = cur.yaw;
             RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Aligned. Approaching to %.1f m", threshold_);
         } else {
-            ctx->publishToPico(-(float)norm_x * 1.5f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico(-(float)norm_x * 1.5f, 0.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -357,7 +357,7 @@ BT::NodeStatus OrbitPole::onRunning() {
             RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Step %d/8: Turning to tangent.", steps_completed_ + 1);
         } else {
             double yaw_err = normalizeAngle(locked_yaw_ - cur.yaw);
-            ctx->publishToPico(2.0f * (float)yaw_err, 8.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico(2.0f * (float)yaw_err, 8.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -369,7 +369,7 @@ BT::NodeStatus OrbitPole::onRunning() {
             start_time_ = ctx->node->get_clock()->now().seconds();
             locked_yaw_ = cur.yaw;
         } else {
-            ctx->publishToPico((float)yaw_err * 2.0f, 0.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico((float)yaw_err * 2.0f, 0.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -381,7 +381,7 @@ BT::NodeStatus OrbitPole::onRunning() {
             ctx->stopMotion(); 
         } else {
             double yaw_err = normalizeAngle(locked_yaw_ - cur.yaw);
-            ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, 0.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }

@@ -1,0 +1,31 @@
+<root BTCPP_format="4">
+    <TreeNodesModel>
+        <Condition ID="AllSystemsOK"/>
+        <Action ID="DiveToDepth">
+            <input_port name="staystill" type="double"/>
+            <input_port name="target_depth" type="double"/>
+        </Action>
+        <Action ID="Do360Turn">
+            <input_port name="success_when_seen" type="std::string"/>
+        </Action>
+        <Action ID="DriveThruGate">
+            <input_port name="staystill" type="double"/>
+            <output_port name="entry_pose" type="Pose"/>
+            <input_port name="gate_depth" type="double"/>
+        </Action>
+        <Condition ID="IsObjectSeen">
+            <input_port name="object" type="std::string"/>
+        </Condition>
+        <Action ID="NavigateTo">
+            <input_port name="duration" type="double"/>
+            <input_port name="reverse" type="bool"/>
+            <input_port name="to" type="Pose"/>
+        </Action>
+        <Action ID="OrbitPole">
+            <input_port name="staystill" type="double"/>
+            <input_port name="surge_duration" type="double"/>
+            <input_port name="threshold" type="double"/>
+            <input_port name="object" type="std::string"/>
+        </Action>
+    </TreeNodesModel>
+</root>
