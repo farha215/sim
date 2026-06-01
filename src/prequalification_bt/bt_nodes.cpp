@@ -25,10 +25,10 @@ BT::NodeStatus AllSystemsOK::tick() {
 
     if (!ctx->imu_received) {
         RCLCPP_WARN_THROTTLE(ctx->node->get_logger(), *ctx->node->get_clock(), 2000, 
-                             "[AllSystemsOK] Waiting for /imu ...");
+                             "[AllSystemsOK] Awaiting IMU telemetry...");
         return BT::NodeStatus::RUNNING;
     }
-    RCLCPP_INFO(ctx->node->get_logger(), "[AllSystemsOK] Systems nominal.");
+    RCLCPP_INFO(ctx->node->get_logger(), "[AllSystemsOK] All sub-systems nominal.");
     return BT::NodeStatus::SUCCESS;
 }
 
@@ -43,7 +43,7 @@ BT::NodeStatus DiveToDepth::onStart() {
 
     auto ctx = getCtx(config());
     ctx->target_depth = target_z_;
-    RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Diving to z = %.2f m", target_z_);
+    RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Initiating descent to target depth: %.2f m", target_z_);
     
     ctx->publishToPico(0.0f, 0.0f, (float)target_z_, 0);
     return BT::NodeStatus::RUNNING;
@@ -66,11 +66,11 @@ BT::NodeStatus DiveToDepth::onRunning() {
         if (staystill_ > 0.01) {
             in_stay_still_ = true;
             stay_still_start_ = std::chrono::steady_clock::now();
-            RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Depth reached. Staying still for %.1f s", staystill_);
+            RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Target depth attained. Maintaining station for %.1f s.", staystill_);
             ctx->stopMotion();
             return BT::NodeStatus::RUNNING;
         }
-        RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Target depth reached.");
+        RCLCPP_INFO(ctx->node->get_logger(), "[DiveToDepth] Target depth attained.");
         return BT::NodeStatus::SUCCESS;
     }
 
@@ -105,7 +105,7 @@ BT::NodeStatus Do360Turn::onStart() {
     prev_yaw_ = ctx->getCurrentPose().yaw;
     accumulated_yaw_ = 0.0;
 
-    RCLCPP_INFO(ctx->node->get_logger(), "[Do360Turn] Searching for %s...", target_object_.c_str());
+    RCLCPP_INFO(ctx->node->get_logger(), "[Do360Turn] Initiating 360-degree scan for: %s", target_object_.c_str());
     ctx->publishToPico(0.5f, 0.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
@@ -116,7 +116,7 @@ BT::NodeStatus Do360Turn::onRunning() {
 
     if (ctx->isObjectSeen(target_object_)) {
         ctx->stopMotion();
-        RCLCPP_INFO(ctx->node->get_logger(), "[Do360Turn] %s found.", target_object_.c_str());
+        RCLCPP_INFO(ctx->node->get_logger(), "[Do360Turn] Visual confirmation: %s detected.", target_object_.c_str());
         return BT::NodeStatus::SUCCESS;
     }
 
@@ -126,7 +126,7 @@ BT::NodeStatus Do360Turn::onRunning() {
 
     if (accumulated_yaw_ >= (2.0 * M_PI)) {
         ctx->stopMotion();
-        RCLCPP_WARN(ctx->node->get_logger(), "[Do360Turn] Full rotation complete. %s not found.", target_object_.c_str());
+        RCLCPP_WARN(ctx->node->get_logger(), "[Do360Turn] Scan complete. Target %s not detected in sector.", target_object_.c_str());
         return BT::NodeStatus::FAILURE;
     }
 
@@ -169,30 +169,33 @@ BT::NodeStatus DriveThruGate::onRunning() {
 
     if (phase_ == Phase::ALIGN) {
         if (!gate_seen) {
-            ctx->publishToPico(0.3f, 0.0f, (float)ctx->target_depth, 0);
+            // Consistent search rotation (negative -> turn right)
+            ctx->publishToPico(-0.3f, 0.0f, (float)ctx->target_depth, 0); 
             align_started_ = false;
             return BT::NodeStatus::RUNNING;
         }
 
         double norm_x = ox / std::max(oz, 0.5);
-        if (std::abs(norm_x) < 0.04) {
+        if (std::abs(norm_x) < 0.1) { // Wider deadband for stability
             if (!align_started_) {
                 align_start_time_ = ctx->node->get_clock()->now().seconds();
                 align_started_ = true;
             }
-            if (ctx->node->get_clock()->now().seconds() - align_start_time_ >= 1.0) {
+            if (ctx->node->get_clock()->now().seconds() - align_start_time_ >= 0.4) { 
                 phase_ = Phase::DRIVE;
                 start_time_ = ctx->node->get_clock()->now().seconds();
                 gate_drive_time_ = (oz + 15.0) / 0.5; // Safety timeout
                 gate_lost_started_ = false;
                 entry_pose_ = ctx->getCurrentPose(); 
-                RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Aligned. Surging until gate cleared (+3s).");
+                RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Alignment confirmed. Executing transit through gate.");
             } else {
                 ctx->stopMotion();
             }
         } else {
             align_started_ = false;
-            ctx->publishToPico(-(float)norm_x * 0.8f, 0.0f, (float)ctx->target_depth, 0);
+            // Smoother proportional gain (1.5)
+            float yaw_cmd = -(float)norm_x * 1.5f;
+            ctx->publishToPico(yaw_cmd, 0.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -203,14 +206,14 @@ BT::NodeStatus DriveThruGate::onRunning() {
         if (!gate_lost_started_) {
             gate_lost_time_ = ctx->node->get_clock()->now().seconds();
             gate_lost_started_ = true;
-            RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Gate lost. Clearing posts (3s timer started)...");
+            RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Visual contact lost. Commencing 3.0s clearing surge.");
         }
         
         if (ctx->node->get_clock()->now().seconds() - gate_lost_time_ >= 3.0) {
             if (staystill_ > 0.01) {
                 phase_ = Phase::STAY_STILL;
                 stay_still_start_ = std::chrono::steady_clock::now();
-                RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Cleared. Staying still for %.1f s", staystill_);
+                RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Gate cleared. Maintaining station for %.1f s.", staystill_);
                 ctx->stopMotion();
                 return BT::NodeStatus::RUNNING;
             }
@@ -226,7 +229,7 @@ BT::NodeStatus DriveThruGate::onRunning() {
         if (staystill_ > 0.01) {
             phase_ = Phase::STAY_STILL;
             stay_still_start_ = std::chrono::steady_clock::now();
-            RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Timeout reached. Staying still for %.1f s", staystill_);
+            RCLCPP_INFO(ctx->node->get_logger(), "[DriveThruGate] Safety timeout reached. Maintaining station for %.1f s.", staystill_);
             ctx->stopMotion();
             return BT::NodeStatus::RUNNING;
         }
@@ -269,7 +272,7 @@ BT::NodeStatus NavigateTo::onRunning() {
         if (std::abs(yaw_err) < 0.1) {
             start_time_ = ctx->node->get_clock()->now().seconds();
             surge_started_ = true;
-            RCLCPP_INFO(ctx->node->get_logger(), "[NavigateTo] Aligned. Starting timed surge...");
+            RCLCPP_INFO(ctx->node->get_logger(), "[NavigateTo] Alignment attained. Executing timed surge to target waypoint.");
         } else {
             ctx->publishToPico((float)yaw_err * 2.0f, 0.0f, (float)ctx->target_depth, 0);
             return BT::NodeStatus::RUNNING;
@@ -281,11 +284,39 @@ BT::NodeStatus NavigateTo::onRunning() {
         return BT::NodeStatus::SUCCESS;
     }
 
-    ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, (float)ctx->target_depth, 0);
+    ctx->publishToPico((float)yaw_err * 1.2f, 10.0f, (float)ctx->target_depth, 0);
     return BT::NodeStatus::RUNNING;
 }
 
 void NavigateTo::onHalted() { getCtx(config())->stopMotion(); }
+
+// --- SurgeForward -------------------------------------------------------------
+
+BT::NodeStatus SurgeForward::onStart() {
+    duration_ = getInput<double>("duration").value_or(5.0);
+    auto ctx = getCtx(config());
+    rclcpp::spin_some(ctx->node);
+    locked_yaw_ = ctx->getCurrentPose().yaw;
+    start_time_ = ctx->node->get_clock()->now().seconds();
+    RCLCPP_INFO(ctx->node->get_logger(), "[SurgeForward] Executing open-loop surge for %.1f seconds.", duration_);
+    return BT::NodeStatus::RUNNING;
+}
+
+BT::NodeStatus SurgeForward::onRunning() {
+    auto ctx = getCtx(config());
+    rclcpp::spin_some(ctx->node);
+
+    if (ctx->node->get_clock()->now().seconds() - start_time_ >= duration_) {
+        ctx->stopMotion();
+        return BT::NodeStatus::SUCCESS;
+    }
+
+    double yaw_err = normalizeAngle(locked_yaw_ - ctx->getCurrentPose().yaw);
+    ctx->publishToPico((float)yaw_err * 1.2f, 10.0f, (float)ctx->target_depth, 0);
+    return BT::NodeStatus::RUNNING;
+}
+
+void SurgeForward::onHalted() { getCtx(config())->stopMotion(); }
 
 // --- OrbitPole --------------------------------------------------------------
 
@@ -320,44 +351,61 @@ BT::NodeStatus OrbitPole::onRunning() {
         if (staystill_ > 0.01) {
             phase_ = Phase::STAY_STILL;
             stay_still_start_ = std::chrono::steady_clock::now();
-            RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Orbit complete. Staying still for %.1f s", staystill_);
+            RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Orbit protocol complete. Maintaining station for %.1f s.", staystill_);
             ctx->stopMotion();
             return BT::NodeStatus::RUNNING;
         }
         ctx->stopMotion();
-        RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Orbit complete.");
+        RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Orbit protocol complete.");
         return BT::NodeStatus::SUCCESS;
     }
 
     double ox, oy, oz;
     bool seen = ctx->getObjectPosition(target_object_, ox, oy, oz);
-
     if (phase_ == Phase::ALIGN) {
         if (!seen) {
-            ctx->publishToPico(0.4f, 0.0f, (float)ctx->target_depth, 0);
+            // Match Do360Turn direction (positive -> turn left) to prevent jitter
+            ctx->publishToPico(0.3f, 0.0f, (float)ctx->target_depth, 0); 
             return BT::NodeStatus::RUNNING;
         }
+
         double norm_x = ox / std::max(oz, 0.5);
-        if (std::abs(norm_x) < 0.06) {
-            phase_ = Phase::APPROACH;
-            locked_yaw_ = cur.yaw;
-            RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Aligned. Approaching to %.1f m", threshold_);
-        } else {
-            ctx->publishToPico(-(float)norm_x * 1.5f, 0.0f, (float)ctx->target_depth, 0);
+        
+        // Continuous proportional control to eliminate derivative kick
+        float yaw_cmd = -(float)norm_x * 1.2f;
+        ctx->publishToPico(yaw_cmd, 0.0f, (float)ctx->target_depth, 0);
+
+        if (std::abs(norm_x) < (steps_completed_ == 0 ? 0.05 : 0.15)) {
+            if (steps_completed_ == 0) {
+                phase_ = Phase::APPROACH;
+                locked_yaw_ = cur.yaw;
+                RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Precision alignment attained. Initiating approach to %.1f m.", threshold_);
+            } else {
+                phase_ = Phase::TURN;
+                double correction = clampVal((threshold_ - oz) * 0.5, -0.4, 0.4); 
+                target_yaw_ = normalizeAngle(cur.yaw - (85.0 * M_PI / 180.0) - correction); 
+                RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Executing orbit sector %d/8: Aligning to tangent.", steps_completed_ + 1);
+            }
         }
         return BT::NodeStatus::RUNNING;
     }
 
     if (phase_ == Phase::APPROACH) {
-        if (!seen) { phase_ = Phase::ALIGN; return BT::NodeStatus::RUNNING; }
+        if (!seen || oz < 0.5) { // Ignore if lost OR if depth drops to an impossibly small noise value
+            // Maintain the straight-line surge and wait for valid depth data.
+            double yaw_err = normalizeAngle(locked_yaw_ - cur.yaw);
+            ctx->publishToPico((float)yaw_err * 1.0f, 6.0f, (float)ctx->target_depth, 0);
+            return BT::NodeStatus::RUNNING;
+        }
+
         if (oz <= threshold_ + 0.1) {
             phase_ = Phase::TURN;
             double correction = clampVal((threshold_ - oz) * 0.5, -0.4, 0.4); 
             target_yaw_ = normalizeAngle(cur.yaw - (85.0 * M_PI / 180.0) - correction); 
-            RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Step %d/8: Turning to tangent.", steps_completed_ + 1);
+            RCLCPP_INFO(ctx->node->get_logger(), "[OrbitPole] Proximity threshold reached. Sector %d/8: Aligning to tangent.", steps_completed_ + 1);
         } else {
             double yaw_err = normalizeAngle(locked_yaw_ - cur.yaw);
-            ctx->publishToPico(2.0f * (float)yaw_err, 8.0f, (float)ctx->target_depth, 0);
+            ctx->publishToPico((float)yaw_err * 1.0f, 6.0f, (float)ctx->target_depth, 0);
         }
         return BT::NodeStatus::RUNNING;
     }
@@ -378,7 +426,6 @@ BT::NodeStatus OrbitPole::onRunning() {
         if (ctx->node->get_clock()->now().seconds() - start_time_ >= surge_duration_) {
             phase_ = Phase::ALIGN;
             steps_completed_++;
-            ctx->stopMotion(); 
         } else {
             double yaw_err = normalizeAngle(locked_yaw_ - cur.yaw);
             ctx->publishToPico((float)yaw_err * 2.0f, 10.0f, (float)ctx->target_depth, 0);

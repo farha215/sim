@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     rclcpp::spin_some(node);
 
     // --- Mission Loop -------------------------------------------------------
-    RCLCPP_INFO(node->get_logger(), "=== Starting Pre-Qualification Mission ===");
+    RCLCPP_INFO(node->get_logger(), "RoboSub Pre-Qualification Mission: COMMENCING EXECUTION");
 
     constexpr auto TICK_PERIOD = std::chrono::milliseconds(100);
     BT::NodeStatus status      = BT::NodeStatus::RUNNING;
@@ -111,9 +111,9 @@ int main(int argc, char** argv) {
     ctx->stopMotion();
 
     if (status == BT::NodeStatus::SUCCESS) {
-        RCLCPP_INFO(node->get_logger(), "=== Mission COMPLETE ===");
+        RCLCPP_INFO(node->get_logger(), "RoboSub Pre-Qualification Mission: STATUS SUCCESS");
     } else {
-        RCLCPP_WARN(node->get_logger(), "=== Mission FAILED ===");
+        RCLCPP_WARN(node->get_logger(), "RoboSub Pre-Qualification Mission: STATUS FAILURE");
     }
 
     rclcpp::shutdown();

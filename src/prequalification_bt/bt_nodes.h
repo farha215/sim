@@ -115,7 +115,7 @@ struct RobotContext {
             const auto& id = hyp.class_id;
             const auto& score = hyp.score;
 
-            if (((object == "GATE" && id == "preq_gate" && score >= 0.6) ||
+            if (((object == "GATE" && id == "preq_gate" && score >= 0.8) ||
                  (object == "POLE" && id == "preq_pole" && score >= 0.3))) {
                 ox = det.bbox.center.position.x;
                 oy = det.bbox.center.position.y;
@@ -255,6 +255,20 @@ private:
     std::chrono::steady_clock::time_point stay_still_start_;
 };
 
+class SurgeForward : public BT::StatefulActionNode {
+public:
+    SurgeForward(const std::string& name, const BT::NodeConfig& config) : BT::StatefulActionNode(name, config) {}
+    static BT::PortsList providedPorts() {
+        return { BT::InputPort<double>("duration") };
+    }
+    BT::NodeStatus onStart() override;
+    BT::NodeStatus onRunning() override;
+    void onHalted() override;
+private:
+    double start_time_ = 0.0, duration_ = 5.0;
+    double locked_yaw_ = 0.0;
+};
+
 /**
  * @brief Registration helper for the Behavior Tree factory.
  */
@@ -266,4 +280,5 @@ inline void registerAllNodes(BT::BehaviorTreeFactory& factory) {
     factory.registerNodeType<DriveThruGate>("DriveThruGate");
     factory.registerNodeType<NavigateTo>("NavigateTo");
     factory.registerNodeType<OrbitPole>("OrbitPole");
+    factory.registerNodeType<SurgeForward>("SurgeForward");
 }

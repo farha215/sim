@@ -13,7 +13,10 @@
                 <IsObjectSeen object="GATE"/>
                 <Do360Turn success_when_seen="GATE"/>
             </Fallback>
-            <DriveThruGate gate_depth="6.0" entry_pose="{T1}" staystill="3.0"/>
+            <DriveThruGate gate_depth="6.0" entry_pose="{T1}" staystill="0.0"/>
+
+            <!-- Surge forward after clearing the gate before searching for the pole -->
+            <SurgeForward duration="5.0"/>
 
             <!-- 3. POLE MISSION -->
             <Fallback name="find_pole">
@@ -23,12 +26,8 @@
             <OrbitPole object="POLE" threshold="1.5" staystill="3.0" surge_duration="2.5"/>
             
             <!-- 4. RETURN HOME -->
-            <NavigateTo to="{T1}" duration="10.0" reverse="true"/>
-            <Fallback name="find_gate_home">
-                <IsObjectSeen object="GATE"/>
-                <Do360Turn success_when_seen="GATE"/>
-            </Fallback>
-            <DriveThruGate gate_depth="4.0" staystill="3.0"/>
+            <NavigateTo name="return_home_align_1" to="{T1}" duration="8.0" reverse="true"/>
+            <DriveThruGate gate_depth="10.0" staystill="3.0"/> <!-- This handles the 3s surge after 'lost' -->
         </Sequence>
     </BehaviorTree>
 
@@ -54,6 +53,9 @@
             <input_port name="threshold" type="double">Orbit radius</input_port>
             <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
             <input_port name="surge_duration" type="double" default="4.0">Time to surge after tangent</input_port>
+        </Action>
+        <Action ID="SurgeForward">
+            <input_port name="duration" type="double">Time to surge straight</input_port>
         </Action>
         <Action ID="NavigateTo">
             <input_port name="to" type="Pose">Target pose</input_port>
