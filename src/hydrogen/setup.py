@@ -49,7 +49,7 @@ setup(
         # Parameters
         ('share/' + package_name + '/parameters', ['parameters/bridge_params.yaml']),
         # YOLO model
-        ('share/' + package_name, ['hydrogen/best.pt']),
+        ('share/' + package_name, ['hydrogen/prequal.pt']),
     ],
     install_requires=['setuptools'],
     zip_safe=True,

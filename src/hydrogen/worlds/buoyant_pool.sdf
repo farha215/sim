@@ -44,11 +44,13 @@
       </sky>
     </scene>
 
+<!--
     <include>
       <uri>model://startgate</uri>
       <name>startgate</name>
       <pose>0 0 0.223185 0 0 0</pose>
     </include>
+-->
 
     <include>
       <uri>model://pool</uri>

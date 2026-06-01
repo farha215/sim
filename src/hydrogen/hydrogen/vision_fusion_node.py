@@ -41,7 +41,7 @@ class VisionFusionNode(Node):
 
         # Load YOLO Model
         package_share_directory = get_package_share_directory('hydrogen')
-        model_path = os.path.join(package_share_directory, 'best.pt')
+        model_path = os.path.join(package_share_directory, 'prequal.pt')
         self.model = YOLO(model_path)
         self.get_logger().info(f"YOLO model loaded from {model_path}")
 
