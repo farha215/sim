@@ -136,7 +136,7 @@ All registered in `setup.py` as console scripts.
 | `imu_node` | `imu_publisher.py` | BNO055 IMU driver over I²C. Publishes `sensor_msgs/Imu` on `/imu` @ 10 Hz, `frame_id="imu_link"`. |
 | `dshot_node` | `thruster_Dshot_publisher.py` | UART bridge to thruster ESCs over `/dev/ttyAMA0` @ 115200, 500 Hz. Maps thrust ∈ [-100, +100] → DShot 11-bit throttle (CCW = 1001-2000, CW = 0-1000). Adds 4-bit CRC. |
 | `thruster_teleop` | `thruster_teleop.py` | Keyboard teleop that **blends** controller outputs (`new_thrust_*` on 3 channels) with manual offsets across all 5 thrusters. Arrow keys = ascend/descend/yaw, WSAD/IJKL = surge/pitch/roll. |
-| `thruster_teleop_GP` | `thruster_teleop_GP.py` | Pygame-based **gamepad → `/cmd_vel`** publisher. Axes 0–3 = sway, surge, yaw, heave. Scaled by `linear_scale=20`, `angular_scale=20`. |
+| `thruster_teleop_GP` | `thruster_teleop_GP.py` | Pygame-based **gamepad → `/cmd_vel`** publisher. Axes 0–3 = lateral, surge, yaw, heave. Scaled by `linear_scale=20`, `angular_scale=20`. |
 | `yolo_node` | `yolo_node.py` | Ultralytics YOLO inference on `/camera/RGB_image_raw/front` using `share/hydrogen/best.pt`. Publishes `vision_msgs/Detection2DArray` on `/detections_2d` + annotated image on `/yolo/detection_image`. |
 | `data_distance_node` | `data_distance_node.py` | **HSV + depth-fusion 3D detector** (no NN). Synchronises depth + RGB, masks orange in HSV, dilates, finds contours, classifies bbox by aspect ratio (`preq_pole` if h/w ≥ 2 else `preq_gate`), extracts z from depth ROI (foreground clustering within 0.5 m of nearest pixel), back-projects via camera intrinsics. Publishes `Detection3DArray` on `/detections_3d`. Gate is filtered if z > 2 m. |
 | `distance_node` | `distance_node.py` | Interactive **debug tool**: draw an ROI with the mouse on the RGB feed, prints median depth. Not used at runtime. |
@@ -154,18 +154,18 @@ Aditya's package — everything from thruster allocation up to path following.
 
 | Entry point | Module | Role |
 |---|---|---|
-| `allocation_matrix` | `allocation_matrix.py` | Maps `/cmd_vel` (6-DOF wrench) → 5 thrust commands via Moore-Penrose pseudo-inverse of a 6×5 allocation matrix. Geometry: `W=0.35, Lf=Lr=0.30`. **No sway authority** (Fy row is zero). Output clipped to ±100 N. |
+| `allocation_matrix` | `allocation_matrix.py` | Maps `/cmd_vel` (6-DOF wrench) → 5 thrust commands via Moore-Penrose pseudo-inverse of a 6×5 allocation matrix. Geometry: `W=0.35, Lf=Lr=0.30`. **No lateral authority** (Fy row is zero). Output clipped to ±100 N. |
 | `global_planner` | `global_planner_node.py` | Builds a voxel occupancy grid from `/cloud_map`, runs 3D A*, then a 4-tier post-processing chain: (1) collinear prune, (2) cubic spline smooth, (3) arc-length resample @ 0.3 m, (4) curvature limit (κ_max=0.4 → R_min=2.5 m), (5) validity check against grid. Publishes `nav_msgs/Path` on `/planned_path`. Exposes service `plan_path` (`custom_interfaces/PlanPath`). Smoothes per-point yaw/pitch with a 5-sample moving average. |
 | `los_controller` | `los_control.py` | **VFG (Vector Field Guidance) + ILOS** path follower with a built-in Tkinter live-tuning GUI (toggle with `--ros-args -p gui:=false`). Subscribes `/planned_path` + `/odom`, publishes `/cmd_vel`. ~16 tunable parameters declared via `declare_parameter`; saves/loads to `~/.ros/vfg_params.yaml`. Handles a position-hold state at the final waypoint. |
-| `6dof_pid` | `6dof_pid.py` | Older **adaptive-LOS + 6-DOF PID** controller (X/Z/yaw active, sway forced to 0). Lookahead δ = (δ_max − δ_min)·exp(−k·e_ct) + δ_min. Same in/out topics as `los_controller`. |
+| `6dof_pid` | `6dof_pid.py` | Older **adaptive-LOS + 6-DOF PID** controller (X/Z/yaw active, lateral forced to 0). Lookahead δ = (δ_max − δ_min)·exp(−k·e_ct) + δ_min. Same in/out topics as `los_controller`. |
 
 `6dof_pid copy.py` and `los_control copy.py` exist as backups — ignore for new work.
 
 ### 4.2 Coordinate / sign conventions
 
 - `/cmd_vel` is a 6-DOF wrench in the body frame: `linear.{x,y,z}` = surge,
-  sway, heave forces; `angular.{x,y,z}` = roll, pitch, yaw torques.
-- Allocation matrix rows are `[Fx, Fy, Fz, τx, τy, τz]`. Rows for sway and
+  lateral, heave forces; `angular.{x,y,z}` = roll, pitch, yaw torques.
+- Allocation matrix rows are `[Fx, Fy, Fz, τx, τy, τz]`. Rows for lateral and
   the third vertical thruster's contribution to pitch encode the physical
   geometry — read `allocation_matrix.py` directly when re-tuning thruster
   positions.
@@ -333,8 +333,8 @@ ros2 launch hydrogen AUV.launch.py
   control commands but on **different** topics (`new_thrust_*` vs `/cmd_vel`).
   Don't run both as drivers of the same thruster set without checking the
   blender in `thruster_teleop.py`.
-- The allocation matrix has **zero sway authority** by design — controllers
-  must produce surge / yaw / heave commands only (sway is force-zeroed in
+- The allocation matrix has **zero lateral authority** by design — controllers
+  must produce surge / yaw / heave commands only (lateral is force-zeroed in
   `6dof_pid.py` line ~104, and absent from `los_control.py` outputs).
 - `RTAB_map.launch.py` spawns `global_planner` as part of the SLAM stack —
   this is convenient but means the planner only exists when SLAM is up.

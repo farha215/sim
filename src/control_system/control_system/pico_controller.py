@@ -16,7 +16,7 @@ class PicoController(Node):
           delta_yaw     yaw error    (rad)   -> angular.z
           delta_d       surge error  (m)     -> linear.x
           target_depth  depth setpt  (m, +down)
-          stop_bit      uint8: 1 zeroes surge/sway/yaw, depth keeps tracking
+          stop_bit      uint8: 1 zeroes surge/lateral/yaw, depth keeps tracking
 
       /altimeter (std_msgs/Float64)  positive-down depth feedback
 
@@ -143,7 +143,7 @@ class PicoController(Node):
                             self.get_parameter('yaw_limit').value)
                                     
             cmd.linear.x = float(max(-s_lim, min(s_lim, u_surge)))
-            cmd.linear.y = 0.0 # Force zero sway (Under-actuated)
+            cmd.linear.y = 0.0 # Force zero lateral movement (Under-actuated)
             cmd.angular.z = float(max(-y_lim, min(y_lim, u_yaw)))
         else:
             self.i_surge = self.i_yaw = 0.0

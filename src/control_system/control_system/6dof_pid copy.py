@@ -261,7 +261,7 @@ class SixDOFPID(Node):
         error    = self.target - self.current
         error[5] = self.wrap_angle(error[5])
 
-        # no sway thruster — zero Y to prevent integral wind-up
+        # no lateral thruster — zero Y to prevent integral wind-up
         error[1]         = 0.0
         self.integral[1] = 0.0
 
