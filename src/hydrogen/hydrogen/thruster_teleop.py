@@ -2,7 +2,7 @@
 import rclpy
 import sys, select, tty, termios, signal
 from rclpy.node import Node
-from std_msgs.msg import Float64
+from custom_interfaces.msg import ToPico
 
 
 def clamp(v, lo, hi):
@@ -17,74 +17,36 @@ class TeleopNode(Node):
     def __init__(self):
         super().__init__("teleop_thrusters")
 
-        # ================= Controller Subscriptions (ONLY 3 thrusters) =================
-        self.sub_front = self.create_subscription(
-            Float64, 'new_thrust_front', self.cb_front, 10
-        )
-        self.sub_left = self.create_subscription(
-            Float64, 'new_thrust_left', self.cb_left, 10
-        )
-        self.sub_right = self.create_subscription(
-            Float64, 'new_thrust_right', self.cb_right, 10
-        )
+        self.pub_to_pico = self.create_publisher(ToPico, '/to_pico', 10)
 
-        # ================= Thruster Command Publishers (ALL 5) =================
-        self.pubs = {
-            'back_propeller': self.create_publisher(
-                Float64, '/hydrogen/back_propeller/cmd_thrust', 10),
-            'right_propeller_1': self.create_publisher(
-                Float64, '/hydrogen/right_propeller_1/cmd_thrust', 10),
-            'right_propeller_2': self.create_publisher(
-                Float64, '/hydrogen/right_propeller_2/cmd_thrust', 10),
-            'left_propeller_1': self.create_publisher(
-                Float64, '/hydrogen/left_propeller_1/cmd_thrust', 10),
-            'left_propeller_2': self.create_publisher(
-                Float64, '/hydrogen/left_propeller_2/cmd_thrust', 10),
-        }
+        self.surge_scale  = 5.0
+        self.yaw_scale    = 1.5
+        self.surge_step   = 0.5    # delta_d per key press
+        self.yaw_step     = 0.15   # delta_yaw per key press
+        self.depth_step   = 0.1    # m per arrow press
+        self.depth_min    = 0.0
+        self.depth_max    = 10.0
 
-        # ================= Controller Values (ONLY 3 USED) =================
-        self.ctrl_values = {
-            'front_propeller': 0.0,
-            'left_propeller_2': 0.0,
-            'right_propeller_2': 0.0,
-        }
+        self.delta_d      = 0.0
+        self.delta_yaw    = 0.0
+        self.target_depth = 0.0
+        self.stop_bit     = 0
 
-        # ================= Manual Offsets (ALL 5) =================
-        self.manual_offsets = {k: 0.0 for k in self.pubs.keys()}
+        self.timer = self.create_timer(0.05, self.publish_cmd)
 
-        self.step = 2.0
-        self.max_thrust = 40.0
+    def publish_cmd(self):
+        msg = ToPico()
+        msg.delta_d      = float(self.delta_d)
+        msg.delta_yaw    = float(self.delta_yaw)
+        msg.target_depth = float(self.target_depth)
+        msg.stop_bit     = self.stop_bit
+        self.pub_to_pico.publish(msg)
 
-        self.timer = self.create_timer(0.1, self.publish_all)
-
-    # ================= Controller Callbacks =================
-    def cb_front(self, msg):
-        self.ctrl_values['front_propeller'] = msg.data
-
-    def cb_left(self, msg):
-        self.ctrl_values['left_propeller_2'] = msg.data
-
-    def cb_right(self, msg):
-        self.ctrl_values['right_propeller_2'] = msg.data
-
-    # ================= Publishing =================
-    def publish_all(self):
-        for name, pub in self.pubs.items():
-
-            # Controller contributes ONLY to these 3
-            ctrl = self.ctrl_values.get(name, 0.0)
-
-            blended = ctrl + self.manual_offsets[name]
-            blended = clamp(blended, -self.max_thrust, self.max_thrust)
-
-            msg = Float64()
-            msg.data = float(blended)
-            pub.publish(msg)
-
-    def stop_all(self):
-        for k in self.manual_offsets:
-            self.manual_offsets[k] = 0.0
-        self.publish_all()
+    def stop(self):
+        self.delta_d   = 0.0
+        self.delta_yaw = 0.0
+        self.stop_bit  = 1
+        self.publish_cmd()
 
 
 def main(args=None):
@@ -92,24 +54,12 @@ def main(args=None):
     node = TeleopNode()
 
     print("""
-Teleop + Controller Blending Active
+Keyboard Teleop → /to_pico
 
-Controller + Keyboard:
-  - front_propeller
-  - left_propeller_2
-  - right_propeller_2
-
-Keyboard ONLY:
-  - left_propeller_1
-  - right_propeller_1
-
-Controls:
-  Arrow Up / Down : Ascend / Descend
-  Arrow Left/Right: Yaw
-  W / S           : Forward / Backward
-  I / K           : Pitch
-  J / L           : Roll
-  SPACE           : Clear manual offsets
+  W / S           : Surge forward / backward
+  A / D           : Yaw left / right
+  Arrow Up / Down : Target depth shallower / deeper
+  SPACE           : Zero surge & yaw (hold depth)
   X               : Exit
 """)
 
@@ -118,7 +68,7 @@ Controls:
     tty.setcbreak(fd)
 
     def exit_clean(*_):
-        node.stop_all()
+        node.stop()
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         rclpy.shutdown()
         sys.exit(0)
@@ -127,72 +77,47 @@ Controls:
 
     try:
         while rclpy.ok():
-
             if is_data():
                 ch = sys.stdin.read(1)
 
-                # ===== Arrow keys =====
                 if ch == '\x1b':
                     seq = sys.stdin.read(2)
 
-                    if seq == '[A':  # ascend
-                        node.manual_offsets['front_propeller'] += node.step
-                        node.manual_offsets['left_propeller_2'] += node.step
-                        node.manual_offsets['right_propeller_2'] += node.step
+                    if seq == '[A':   # up → shallower
+                        node.target_depth -= node.depth_step
+                        node.target_depth = clamp(node.target_depth, node.depth_min, node.depth_max)
+                        node.get_logger().info(f"target_depth = {node.target_depth:.2f} m")
 
-                    elif seq == '[B':  # descend
-                        node.manual_offsets['front_propeller'] -= node.step
-                        node.manual_offsets['left_propeller_2'] -= node.step
-                        node.manual_offsets['right_propeller_2'] -= node.step
-
-                    elif seq == '[C':  # yaw right (keyboard-only thrusters)
-                        node.manual_offsets['left_propeller_1'] -= node.step
-                        node.manual_offsets['right_propeller_1'] += node.step
-
-                    elif seq == '[D':  # yaw left
-                        node.manual_offsets['left_propeller_1'] += node.step
-                        node.manual_offsets['right_propeller_1'] -= node.step
+                    elif seq == '[B': # down → deeper
+                        node.target_depth += node.depth_step
+                        node.target_depth = clamp(node.target_depth, node.depth_min, node.depth_max)
+                        node.get_logger().info(f"target_depth = {node.target_depth:.2f} m")
 
                 else:
                     ch = ch.lower()
 
-                    if ch == 'w':  # forward (keyboard-only)
-                        node.manual_offsets['left_propeller_1'] += node.step
-                        node.manual_offsets['right_propeller_1'] += node.step
-
-                    elif ch == 's':  # backward
-                        node.manual_offsets['left_propeller_1'] -= node.step
-                        node.manual_offsets['right_propeller_1'] -= node.step
-
-                    elif ch == 'i':  # pitch down
-                        node.manual_offsets['left_propeller_2'] += node.step
-                        node.manual_offsets['right_propeller_2'] -= node.step
-
-                    elif ch == 'k':  # pitch up
-                        node.manual_offsets['left_propeller_2'] -= node.step
-                        node.manual_offsets['right_propeller_2'] += node.step
-
-                    elif ch == 'j':  # roll left
-                        node.manual_offsets['left_propeller_2'] -= node.step
-                        node.manual_offsets['right_propeller_2'] += node.step
-
-                    elif ch == 'l':  # roll right
-                        node.manual_offsets['left_propeller_2'] += node.step
-                        node.manual_offsets['right_propeller_2'] -= node.step
-
+                    if ch == 'w':
+                        node.delta_d += node.surge_step
+                    elif ch == 's':
+                        node.delta_d -= node.surge_step
+                    elif ch == 'a':
+                        node.delta_yaw += node.yaw_step
+                    elif ch == 'd':
+                        node.delta_yaw -= node.yaw_step
                     elif ch == ' ':
-                        node.stop_all()
-
+                        node.delta_d   = 0.0
+                        node.delta_yaw = 0.0
+                        node.stop_bit  = 1
                     elif ch == 'x':
                         exit_clean()
 
-                # Clamp offsets
-                for k in node.manual_offsets:
-                    node.manual_offsets[k] = clamp(
-                        node.manual_offsets[k],
-                        -node.max_thrust,
-                        node.max_thrust
-                    )
+                # Clamp values
+                node.delta_d   = clamp(node.delta_d,   -node.surge_scale, node.surge_scale)
+                node.delta_yaw = clamp(node.delta_yaw, -node.yaw_scale,   node.yaw_scale)
+
+                # Clear stop_bit once a non-space key was pressed
+                if ch != ' ':
+                    node.stop_bit = 0
 
             rclpy.spin_once(node, timeout_sec=0.02)
 
@@ -202,4 +127,3 @@ Controls:
 
 if __name__ == "__main__":
     main()
-
