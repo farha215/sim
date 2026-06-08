@@ -46,6 +46,7 @@ setup(
         ('share/' + package_name + '/worlds/octagon', package_files('worlds/octagon')),
         ('share/' + package_name + '/worlds/trash', package_files('worlds/trash')),
         ('share/' + package_name + '/worlds/preq_task', package_files('worlds/preq_task')),
+        ('share/' + package_name + '/worlds/torpedo_board', package_files('worlds/torpedo_board')),
         # Parameters
         ('share/' + package_name + '/parameters', ['parameters/bridge_params.yaml']),
         # YOLO model
@@ -70,6 +71,8 @@ setup(
             'yolo_node = hydrogen.yolo_node:main',
             'data_distance_node = hydrogen.data_distance_node:main',
             'vision_fusion_node = hydrogen.vision_fusion_node:main',
+            'teleop_hold_down = hydrogen.teleop_hold_down:main',
+            
         ],
     },
 )

@@ -4,6 +4,7 @@ src/log/
 build/
 install/
 log/
+.vscode/
 
 .DS_Store
 
