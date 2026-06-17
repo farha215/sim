@@ -222,6 +222,12 @@
       <name>preq_task</name>
       <pose>-5 -20 -1.2 0 0 0</pose>
     </include>
+    
+    <include>
+      <uri>model://torpedo_board</uri>
+      <name>torpedo_board</name>
+      <pose>0.664937 -7.374320 -0.150382 0 0 0</pose>
+    </include>
 
     
     <!--
