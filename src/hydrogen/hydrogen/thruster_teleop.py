@@ -2,7 +2,7 @@
 import rclpy
 import sys, select, tty, termios, signal
 from rclpy.node import Node
-from custom_interfaces.msg import ToPico
+from auv_msgs.msg import ControlCommand
 
 
 def clamp(v, lo, hi):
@@ -17,7 +17,7 @@ class TeleopNode(Node):
     def __init__(self):
         super().__init__("teleop_thrusters")
 
-        self.pub_to_pico = self.create_publisher(ToPico, '/to_pico', 10)
+        self.pub_to_pico = self.create_publisher(ControlCommand, '/control_cmd', 10)
 
         self.surge_scale  = 5.0
         self.yaw_scale    = 1.5
@@ -35,11 +35,11 @@ class TeleopNode(Node):
         self.timer = self.create_timer(0.05, self.publish_cmd)
 
     def publish_cmd(self):
-        msg = ToPico()
-        msg.delta_d      = float(self.delta_d)
-        msg.delta_yaw    = float(self.delta_yaw)
-        msg.target_depth = float(self.target_depth)
-        msg.stop_bit     = self.stop_bit
+        msg = ControlCommand()
+        msg.delta_distance = float(self.delta_d)
+        msg.delta_theta    = float(self.delta_yaw)
+        msg.target_depth   = float(self.target_depth)
+        msg.stop_thrusters = self.stop_bit
         self.pub_to_pico.publish(msg)
 
     def stop(self):
@@ -54,7 +54,7 @@ def main(args=None):
     node = TeleopNode()
 
     print("""
-Keyboard Teleop → /to_pico
+Keyboard Teleop → /control_cmd
 
   W / S           : Surge forward / backward
   A / D           : Yaw left / right

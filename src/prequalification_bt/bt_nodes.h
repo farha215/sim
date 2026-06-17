@@ -16,7 +16,7 @@
 #include <vision_msgs/msg/detection3_d_array.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
-#include "custom_interfaces/msg/to_pico.hpp"
+#include "auv_msgs/msg/control_command.hpp"
 
 #include <cmath>
 #include <memory>
@@ -59,7 +59,7 @@ struct RobotContext {
 
     bool imu_received  = false;
 
-    rclcpp::Publisher<custom_interfaces::msg::ToPico>::SharedPtr pico_pub;
+    rclcpp::Publisher<auv_msgs::msg::ControlCommand>::SharedPtr pico_pub;
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr              imu_sub;
     rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr             alt_sub;
@@ -129,12 +129,12 @@ struct RobotContext {
     /**
      * @brief Publishes control setpoints to the Pico controller.
      */
-    void publishToPico(float delta_yaw, float delta_d, float target_depth_val, uint8_t stop_bit) {
-        custom_interfaces::msg::ToPico msg;
-        msg.delta_yaw = delta_yaw;
-        msg.delta_d = delta_d;
+    void publishToPico(float delta_theta, float delta_distance, float target_depth_val, uint8_t stop_thrusters) {
+        auv_msgs::msg::ControlCommand msg;
+        msg.delta_theta = delta_theta;
+        msg.delta_distance = delta_distance;
         msg.target_depth = target_depth_val;
-        msg.stop_bit = stop_bit;
+        msg.stop_thrusters = stop_thrusters;
         pico_pub->publish(msg);
     }
 

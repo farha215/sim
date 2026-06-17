@@ -34,7 +34,7 @@
   gz_type_name: ignition.msgs.Double
   direction: ROS_TO_GZ
   
-- ros_topic_name: /imu
+- ros_topic_name: /zed2i_front/zed_node/imu/data
   gz_topic_name: /imu
   ros_type_name: sensor_msgs/msg/Imu
   gz_type_name: ignition.msgs.IMU

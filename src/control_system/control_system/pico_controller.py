@@ -4,19 +4,19 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Float64
 from geometry_msgs.msg import Twist
-from custom_interfaces.msg import ToPico
+from auv_msgs.msg import ControlCommand
 
 
 class PicoController(Node):
     """
-    Three independent PIDs driven by /to_pico setpoints and /altimeter feedback.
+    Three independent PIDs driven by /control_cmd setpoints and /altimeter feedback.
 
     Inputs:
-      /to_pico  (custom_interfaces/ToPico)
-          delta_yaw     yaw error    (rad)   -> angular.z
-          delta_d       surge error  (m)     -> linear.x
-          target_depth  depth setpt  (m, +down)
-          stop_bit      uint8: 1 zeroes surge/lateral/yaw, depth keeps tracking
+      /control_cmd  (auv_msgs/ControlCommand)
+          delta_theta     yaw error    (rad)   -> angular.z
+          delta_distance  surge error  (m)     -> linear.x
+          target_depth    depth setpt  (m, +down)
+          stop_thrusters  uint8: 1 zeroes surge/lateral/yaw, depth keeps tracking
 
       /altimeter (std_msgs/Float64)  positive-down depth feedback
 
@@ -59,7 +59,7 @@ class PicoController(Node):
         self.delta_yaw = 0.0
         self.delta_d = 0.0
         self.target_depth = 0.0
-        self.stop_bit = 0
+        self.stop_thrusters = 0
         self.depth_meas = 0.0
         self.last_setpoint_time = self.get_clock().now()
 
@@ -68,18 +68,18 @@ class PicoController(Node):
         self.prev_e_surge = self.prev_e_depth = self.prev_e_yaw = 0.0
 
         # I/O
-        self.create_subscription(ToPico, '/to_pico', self.on_to_pico, 10)
+        self.create_subscription(ControlCommand, '/control_cmd', self.on_control_cmd, 10)
         self.create_subscription(Float64, '/altimeter', self.on_altimeter, 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-        self.get_logger().info('pico_controller up. Waiting for /to_pico and /altimeter ...')
+        self.get_logger().info('pico_controller up. Waiting for /control_cmd and /altimeter ...')
 
-    def on_to_pico(self, msg: ToPico):
-        self.delta_yaw = float(msg.delta_yaw)
-        self.delta_d = float(msg.delta_d)
+    def on_control_cmd(self, msg: ControlCommand):
+        self.delta_yaw = float(msg.delta_theta)
+        self.delta_d = float(msg.delta_distance)
         self.target_depth = float(msg.target_depth)
-        self.stop_bit = int(msg.stop_bit)
+        self.stop_thrusters = int(msg.stop_thrusters)
         self.last_setpoint_time = self.get_clock().now()
         self.have_setpoint = True
 
@@ -98,11 +98,11 @@ class PicoController(Node):
             return
 
         # Stale-input behavior: hold the last commanded depth, but zero surge & yaw
-        # (same as stop_bit=1). target_depth is retained from the last /to_pico message.
+        # (same as stop_thrusters=1). target_depth is retained from the last /control_cmd message.
         timeout = self.get_parameter('input_timeout').value
         age = (self.get_clock().now() - self.last_setpoint_time).nanoseconds * 1e-9
         stale = age > timeout
-        effective_stop = self.stop_bit != 0 or stale
+        effective_stop = self.stop_thrusters != 0 or stale
 
         i_clamp = self.get_parameter('i_clamp').value
 
@@ -122,7 +122,7 @@ class PicoController(Node):
         d_lim = self.get_parameter('depth_limit').value
         cmd.linear.z = float(max(-d_lim, min(d_lim, u_depth)))
 
-        # --- Surge & yaw PIDs (gated by stop_bit OR stale input) ---
+        # --- Surge & yaw PIDs (gated by stop_thrusters OR stale input) ---
         if not effective_stop:
             u_surge, self.i_surge, self.prev_e_surge = self._pid(
                 self.delta_d, self.i_surge, self.prev_e_surge,

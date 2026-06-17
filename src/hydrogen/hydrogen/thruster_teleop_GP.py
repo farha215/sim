@@ -3,7 +3,7 @@ import rclpy
 import signal
 import pygame
 from rclpy.node import Node
-from custom_interfaces.msg import ToPico
+from auv_msgs.msg import ControlCommand
 
 
 def clamp(v, lo, hi):
@@ -15,7 +15,7 @@ class GamepadToPico(Node):
         super().__init__("gamepad_to_pico")
 
         # Publisher → pico_controller
-        self.pub_to_pico = self.create_publisher(ToPico, '/to_pico', 10)
+        self.pub_to_pico = self.create_publisher(ControlCommand, '/control_cmd', 10)
 
         # Stick → PID error scaling
         self.surge_scale = 5.0     # max delta_d (m) at full stick
@@ -81,17 +81,17 @@ class GamepadToPico(Node):
             self.get_logger().info(f"target_depth = {self.target_depth:.2f} m")
         self.prev_hat_y = hat_y
 
-        msg = ToPico()
-        msg.delta_d      = float(clamp(surge * self.surge_scale, -self.surge_scale, self.surge_scale))
-        msg.delta_yaw    = float(clamp(yaw   * self.yaw_scale,   -self.yaw_scale,   self.yaw_scale))
-        msg.target_depth = float(self.target_depth)
-        msg.stop_bit     = 0
+        msg = ControlCommand()
+        msg.delta_distance = float(clamp(surge * self.surge_scale, -self.surge_scale, self.surge_scale))
+        msg.delta_theta    = float(clamp(yaw   * self.yaw_scale,   -self.yaw_scale,   self.yaw_scale))
+        msg.target_depth   = float(self.target_depth)
+        msg.stop_thrusters = 0
 
         # Buttons
         if self.joy.get_button(0):  # A → stop surge/yaw, hold depth
-            msg.delta_d   = 0.0
-            msg.delta_yaw = 0.0
-            msg.stop_bit  = 1
+            msg.delta_distance = 0.0
+            msg.delta_theta    = 0.0
+            msg.stop_thrusters = 1
 
         if self.joy.get_button(1):  # B → exit
             raise KeyboardInterrupt
@@ -99,11 +99,11 @@ class GamepadToPico(Node):
         self.pub_to_pico.publish(msg)
 
     def stop(self):
-        msg = ToPico()
-        msg.delta_d      = 0.0
-        msg.delta_yaw    = 0.0
-        msg.target_depth = float(self.target_depth)
-        msg.stop_bit     = 1
+        msg = ControlCommand()
+        msg.delta_distance = 0.0
+        msg.delta_theta    = 0.0
+        msg.target_depth   = float(self.target_depth)
+        msg.stop_thrusters = 1
         self.pub_to_pico.publish(msg)
 
 

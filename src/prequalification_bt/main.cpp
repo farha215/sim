@@ -26,12 +26,12 @@ int main(int argc, char** argv) {
     ctx->node      = node;
 
     // Actuator publishers
-    ctx->pico_pub = node->create_publisher<custom_interfaces::msg::ToPico>("/to_pico", 10);
+    ctx->pico_pub = node->create_publisher<auv_msgs::msg::ControlCommand>("/control_cmd", 10);
 
     // IMU subscription (orientation / yaw)
     ctx->imu_sub =
         node->create_subscription<sensor_msgs::msg::Imu>(
-            "/imu", 10,
+            "/zed2i_front/zed_node/imu/data", 10,
             [ctx](const sensor_msgs::msg::Imu::SharedPtr msg) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
                 ctx->latest_imu   = msg;

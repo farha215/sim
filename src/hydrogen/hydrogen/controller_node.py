@@ -47,7 +47,7 @@ class ControllerNode(Node):
         self.latest_imu = None
 
         # ROS subscriptions
-        self.create_subscription(Imu, '/imu', self.imu_cb, 10)
+        self.create_subscription(Imu, '/zed2i_front/zed_node/imu/data', self.imu_cb, 10)
 
         # Thruster publishers
         self.thrusters = [

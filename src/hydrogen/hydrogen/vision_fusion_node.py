@@ -3,9 +3,10 @@
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter
-from sensor_msgs.msg import Image, CameraInfo
+from sensor_msgs.msg import Image, CameraInfo, Imu
 from vision_msgs.msg import Detection3DArray, Detection3D, ObjectHypothesisWithPose
 from geometry_msgs.msg import Pose, Point, Quaternion
+from auv_msgs.msg import Detection, DetectionArray
 from cv_bridge import CvBridge
 import numpy as np
 import cv2
@@ -52,6 +53,7 @@ class VisionFusionNode(Node):
 
         self.bridge = CvBridge()
         self.camera_info = None
+        self.imu_pose = None
 
         # Load YOLO Model for Gate
         package_share_directory = get_package_share_directory('hydrogen')
@@ -64,18 +66,24 @@ class VisionFusionNode(Node):
         self.rgb_sub   = Subscriber(self, Image, '/camera/RGB_image_raw/front')
         
         self.info_sub = self.create_subscription(CameraInfo, '/camera_info_front', self.camera_info_cb, 10)
+        self.imu_sub  = self.create_subscription(Imu, '/zed2i_front/zed_node/imu/data', self.imu_callback, 10)
 
         self.sync = ApproximateTimeSynchronizer([self.depth_sub, self.rgb_sub], queue_size=10, slop=0.1)
         self.sync.registerCallback(self.synced_cb)
 
-        # Publisher
+        # Publishers
         self.pub = self.create_publisher(Detection3DArray, '/detections_3d', 10)
+        self.detection_pub = self.create_publisher(DetectionArray, '/zed2i_front/detection_msg', 10)
+        self.raw_rgb_pub = self.create_publisher(Image, '/zed2i_front/zed_node/rgb/color/rect/image', 10)
 
         self.last_proc_time = self.get_clock().now()
         self.get_logger().info("Vision Fusion Node initialized (Hybrid: YOLO Gate + HSV Pole).")
 
     def camera_info_cb(self, msg: CameraInfo):
         self.camera_info = msg
+
+    def imu_callback(self, msg: Imu):
+        self.imu_pose = msg.orientation
 
     def get_z_from_depth(self, depth_img, xmin, ymin, xmax, ymax, is_pole=False):
         """
@@ -99,6 +107,9 @@ class VisionFusionNode(Node):
         return z
 
     def synced_cb(self, depth_msg: Image, rgb_msg: Image):
+        # Forward the raw RGB frame under the real ZED topic name, unthrottled
+        self.raw_rgb_pub.publish(rgb_msg)
+
         # Throttle processing to save CPU
         now = self.get_clock().now()
         if (now - self.last_proc_time).nanoseconds < 66000000: # ~15Hz
@@ -114,6 +125,10 @@ class VisionFusionNode(Node):
 
         out = Detection3DArray()
         out.header = rgb_msg.header
+
+        det_array = DetectionArray()
+        det_array.header = rgb_msg.header
+        tracking_id = 0
 
         fx = self.camera_info.k[0]
         fy = self.camera_info.k[4]
@@ -146,6 +161,9 @@ class VisionFusionNode(Node):
 
                 # Add to output
                 self.add_detection_3d(out, "preq_gate", conf, x_3d, y_3d, z, (x2-x1), (y2-y1))
+                self.add_detection(det_array, "preq_gate", conf, x_3d, y_3d, z,
+                                    u_center, v_center, (x2-x1), (y2-y1), tracking_id)
+                tracking_id += 1
 
                 # Visualization
                 cv2.rectangle(rgb_cv, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
@@ -185,6 +203,9 @@ class VisionFusionNode(Node):
 
             # Add to output
             self.add_detection_3d(out, "preq_pole", 1.0, x_3d, y_3d, z, float(w), float(h))
+            self.add_detection(det_array, "preq_pole", 1.0, x_3d, y_3d, z,
+                                u_center, v_center, float(w), float(h), tracking_id)
+            tracking_id += 1
 
             # Visualization
             cv2.rectangle(rgb_cv, (x, y), (x + w, y + h), (0, 0, 255), 2)
@@ -198,6 +219,7 @@ class VisionFusionNode(Node):
         cv2.imshow("Vision Detections (Hybrid)", rgb_cv)
         cv2.waitKey(1)
         self.pub.publish(out)
+        self.detection_pub.publish(det_array)
 
     def add_detection_3d(self, out_array, class_id, score, x, y, z, w_px, h_px):
         det3d = Detection3D()
@@ -217,6 +239,24 @@ class VisionFusionNode(Node):
         det3d.bbox.size.x = det3d.bbox.size.y = det3d.bbox.size.z = 0.1 # Placeholder size
 
         out_array.detections.append(det3d)
+
+    def add_detection(self, out_array, class_id, score, x, y, z,
+                       u_center, v_center, w_px, h_px, tracking_id):
+        det = Detection()
+        det.header = out_array.header
+        det.tracking_id = tracking_id
+        det.class_id = class_id
+        det.confidence = score
+
+        det.bbox_x = float(u_center)
+        det.bbox_y = float(v_center)
+        det.bbox_width = float(w_px)
+        det.bbox_height = float(h_px)
+
+        det.position = Point(x=float(x), y=float(y), z=float(z))
+        det.orientation = self.imu_pose if self.imu_pose is not None else Quaternion(w=1.0)
+
+        out_array.detections.append(det)
 
 def main(args=None):
     rclpy.init(args=args)
