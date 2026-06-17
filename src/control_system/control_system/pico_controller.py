@@ -2,14 +2,14 @@
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64
+from std_msgs.msg import Float32
 from geometry_msgs.msg import Twist
 from auv_msgs.msg import ControlCommand
 
 
 class PicoController(Node):
     """
-    Three independent PIDs driven by /control_cmd setpoints and /altimeter feedback.
+    Three independent PIDs driven by /control_cmd setpoints and /pressure feedback.
 
     Inputs:
       /control_cmd  (auv_msgs/ControlCommand)
@@ -18,7 +18,7 @@ class PicoController(Node):
           target_depth    depth setpt  (m, +down)
           stop_thrusters  uint8: 1 zeroes surge/lateral/yaw, depth keeps tracking
 
-      /altimeter (std_msgs/Float64)  positive-down depth feedback
+      /pressure (std_msgs/Float32)  positive-down depth feedback
 
     Output:
       /cmd_vel  (geometry_msgs/Twist)
@@ -35,7 +35,7 @@ class PicoController(Node):
         self.declare_parameter('kd_surge', 0.3)
 
         self.declare_parameter('kp_depth', 60.0)
-        self.declare_parameter('ki_depth', 0.00)
+        self.declare_parameter('ki_depth', 0.50)
         self.declare_parameter('kd_depth', 0.00)
 
         self.declare_parameter('kp_yaw', 4.0)
@@ -69,11 +69,11 @@ class PicoController(Node):
 
         # I/O
         self.create_subscription(ControlCommand, '/control_cmd', self.on_control_cmd, 10)
-        self.create_subscription(Float64, '/altimeter', self.on_altimeter, 10)
+        self.create_subscription(Float32, '/pressure', self.on_altimeter, 10)
         self.cmd_pub = self.create_publisher(Twist, '/cmd_vel', 10)
         self.timer = self.create_timer(self.dt, self.control_loop)
 
-        self.get_logger().info('pico_controller up. Waiting for /control_cmd and /altimeter ...')
+        self.get_logger().info('pico_controller up. Waiting for /control_cmd and /pressure ...')
 
     def on_control_cmd(self, msg: ControlCommand):
         self.delta_yaw = float(msg.delta_theta)
@@ -83,7 +83,7 @@ class PicoController(Node):
         self.last_setpoint_time = self.get_clock().now()
         self.have_setpoint = True
 
-    def on_altimeter(self, msg: Float64):
+    def on_altimeter(self, msg: Float32):
         self.depth_meas = float(msg.data)
         self.have_depth = True
 

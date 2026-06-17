@@ -29,6 +29,7 @@ setup(
             '6dof_pid = control_system.6dof_pid:main',
             'los_controller = control_system.los_control:main',
             'pico_controller = control_system.pico_controller:main',
+            'pressure_converter = control_system.pressure_converter:main',
         ],
     },
 )

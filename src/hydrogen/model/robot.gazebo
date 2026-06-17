@@ -130,7 +130,7 @@
         <!-- Reference plane (e.g., water surface) -->
         <reference_z>1.0</reference_z>
         <!-- Ignition Transport topic -->
-        <topic>/altimeter</topic>
+        <topic>/pressure_raw</topic>
       </plugin>
     </gazebo>
 

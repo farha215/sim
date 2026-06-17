@@ -40,9 +40,9 @@ int main(int argc, char** argv) {
 
     // Altimeter subscription (altitude above pool floor)
     ctx->alt_sub =
-        node->create_subscription<std_msgs::msg::Float64>(
-            "/altimeter", 10,
-            [ctx](const std_msgs::msg::Float64::SharedPtr msg) {
+        node->create_subscription<std_msgs::msg::Float32>(
+            "/pressure", 10,
+            [ctx](const std_msgs::msg::Float32::SharedPtr msg) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
                 ctx->latest_altimeter = msg->data;
             });

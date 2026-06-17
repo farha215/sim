@@ -99,8 +99,8 @@
   direction: "GZ_TO_ROS"
 
 #altimeter
-- ros_topic_name: /altimeter
-  gz_topic_name: /altimeter
+- ros_topic_name: /pressure_raw
+  gz_topic_name: /pressure_raw
   ros_type_name: std_msgs/msg/Float64
   gz_type_name: ignition.msgs.Double
   direction: GZ_TO_ROS

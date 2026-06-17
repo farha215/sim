@@ -132,10 +132,25 @@ def generate_launch_description():
     	output='screen',
     )
 
+    pressure_converter = Node(
+    	package='control_system',
+    	executable='pressure_converter',
+    	name='pressure_converter',
+    	output='screen',
+    )
+
     pico_controller = Node(
     	package='control_system',
     	executable='pico_controller',
     	name='pico_controller',
+    	output='screen',
+    	parameters=[{'use_sim_time': True}],
+    )
+
+    vision_fusion_node = Node(
+    	package='hydrogen',
+    	executable='vision_fusion_node',
+    	name='vision_fusion_node',
     	output='screen',
     	parameters=[{'use_sim_time': True}],
     )
@@ -159,7 +174,9 @@ def generate_launch_description():
     ld.add_action(spawn_robot)
     ld.add_action(ros_gz_bridge)
     ld.add_action(thruster_allocator)
+    ld.add_action(pressure_converter)
     ld.add_action(pico_controller)
+    ld.add_action(vision_fusion_node)
 
 
     return ld

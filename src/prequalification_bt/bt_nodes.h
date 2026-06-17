@@ -12,7 +12,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <sensor_msgs/msg/imu.hpp>
-#include <std_msgs/msg/float64.hpp>
+#include <std_msgs/msg/float32.hpp>
 #include <vision_msgs/msg/detection3_d_array.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2/LinearMath/Matrix3x3.h>
@@ -62,7 +62,7 @@ struct RobotContext {
     rclcpp::Publisher<auv_msgs::msg::ControlCommand>::SharedPtr pico_pub;
 
     rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr              imu_sub;
-    rclcpp::Subscription<std_msgs::msg::Float64>::SharedPtr             alt_sub;
+    rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr             alt_sub;
     rclcpp::Subscription<vision_msgs::msg::Detection3DArray>::SharedPtr det_sub;
 
     /**

@@ -62,7 +62,7 @@
         filename="libauv_absolute_depth.so"
         name="auv_absolute_depth">
         <reference_z>0.0</reference_z>
-        <topic>/altimeter</topic>
+        <topic>/pressure_raw</topic>
       </plugin>
     </gazebo>
     -->
