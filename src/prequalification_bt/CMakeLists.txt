@@ -11,7 +11,7 @@ find_package(geometry_msgs    REQUIRED)
 find_package(sensor_msgs      REQUIRED)
 find_package(std_msgs         REQUIRED)
 find_package(vision_msgs      REQUIRED)
-find_package(auv_msgs          REQUIRED)
+find_package(auv_msgs         REQUIRED)
 find_package(tf2              REQUIRED)
 find_package(ament_index_cpp  REQUIRED)
 
@@ -48,7 +48,7 @@ install(TARGETS prequalification
     DESTINATION lib/${PROJECT_NAME}
 )
 
-# XML tree file installed to share/ so ament_index_cpp can locate it at runtime
+# XML and config files installed to share/ so ament_index_cpp can locate them at runtime
 install(FILES 
     prequalification.xml
     DESTINATION share/${PROJECT_NAME}

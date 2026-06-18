@@ -14,7 +14,6 @@
 #include <memory>
 #include <string>
 #include <thread>
-#include <fstream>
 
 int main(int argc, char** argv) {
     rclcpp::init(argc, argv);
@@ -24,6 +23,19 @@ int main(int argc, char** argv) {
     // --- Shared robot context -----------------------------------------------
     auto ctx       = std::make_shared<RobotContext>();
     ctx->node      = node;
+
+    // Hardcoded defaults for simulation (Restored to original Hydrogen values)
+    ctx->base_surge_speed = 10.0f;
+    ctx->base_yaw_speed = 0.5f;
+    ctx->gate_conf_thresh = 0.6f;
+    ctx->pole_conf_thresh = 0.3f;
+    ctx->gate_lock_thresh = 0.80f;
+    ctx->pole_lock_thresh = 0.30f;
+    ctx->depth_tolerance = 0.15f;
+    ctx->gate_align_deadband = 0.04f;
+    ctx->pole_align_deadband = 0.06f;
+    ctx->orbit_surge_duration = 4.0f;
+    ctx->orbit_step_angle = 85.0f;
 
     // Actuator publishers
     ctx->pico_pub = node->create_publisher<auv_msgs::msg::ControlCommand>("/control_cmd", 10);
@@ -36,7 +48,7 @@ int main(int argc, char** argv) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
                 ctx->latest_imu   = msg;
                 ctx->imu_received = true;
-            });
+            }); 
 
     // Altimeter subscription (altitude above pool floor)
     ctx->alt_sub =
@@ -45,6 +57,7 @@ int main(int argc, char** argv) {
             [ctx](const std_msgs::msg::Float32::SharedPtr msg) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
                 ctx->latest_altimeter = msg->data;
+                ctx->altimeter_received = true;
             });
 
     // 3D Detections subscription (YOLO + depth fusion)
@@ -56,22 +69,24 @@ int main(int argc, char** argv) {
                 ctx->latest_detections = msg;
             });
 
+    // ZED Image stream subscription (optional for sim, but keeping for compatibility)
+    ctx->image_sub = node->create_subscription<sensor_msgs::msg::Image>(
+        "/zed2i_front/zed_node/rgb/color/rect/image", 10,
+        [ctx](const sensor_msgs::msg::Image::SharedPtr) {
+            std::lock_guard<std::mutex> g(ctx->mtx);
+            ctx->image_received = true;
+            ctx->last_image_t   = ctx->node->get_clock()->now().seconds();
+        });
+
     // --- Behavior Tree Initialization ---------------------------------------
     BT::BehaviorTreeFactory factory;
     registerAllNodes(factory);
 
-    // Dump TreeNodesModel XML for Groot2 visualization
-    {
-        std::string xml_models = BT::writeTreeNodesModelXML(factory);
-        std::ofstream model_file("bt_nodes_model.xml");
-        model_file << xml_models;
-        RCLCPP_INFO(node->get_logger(), "[main] Written bt_nodes_model.xml for Groot2");
-    }
-
     // Locate the XML mission file
     std::string xml_path;
-    if (argc > 1) {
-        xml_path = argv[1];
+    auto non_ros_args = rclcpp::remove_ros_arguments(argc, argv);
+    if (non_ros_args.size() > 1) {
+        xml_path = non_ros_args[1];
     } else {
         try {
             xml_path = ament_index_cpp::get_package_share_directory("prequalification_bt")
@@ -97,7 +112,7 @@ int main(int argc, char** argv) {
     rclcpp::spin_some(node);
 
     // --- Mission Loop -------------------------------------------------------
-    RCLCPP_INFO(node->get_logger(), "RoboSub Pre-Qualification Mission: COMMENCING EXECUTION");
+    RCLCPP_INFO(node->get_logger(), "=== Starting Pre-Qualification Mission ===");
 
     constexpr auto TICK_PERIOD = std::chrono::milliseconds(100);
     BT::NodeStatus status      = BT::NodeStatus::RUNNING;
@@ -111,9 +126,9 @@ int main(int argc, char** argv) {
     ctx->stopMotion();
 
     if (status == BT::NodeStatus::SUCCESS) {
-        RCLCPP_INFO(node->get_logger(), "RoboSub Pre-Qualification Mission: STATUS SUCCESS");
+        RCLCPP_INFO(node->get_logger(), "=== Mission COMPLETE ===");
     } else {
-        RCLCPP_WARN(node->get_logger(), "RoboSub Pre-Qualification Mission: STATUS FAILURE");
+        RCLCPP_WARN(node->get_logger(), "=== Mission FAILED ===");
     }
 
     rclcpp::shutdown();

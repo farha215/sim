@@ -1,66 +1,83 @@
+<!-- 
+================================================================================
+MISSION SEQUENCE CONFIGURATION (XML)
+================================================================================
+USE THIS FILE FOR: Defining the mission flow, target depths, and approach distances.
+NOTE: If you change this file, you MUST RESTART the Behavior Tree node to reload.
+================================================================================
+-->
+
 <root BTCPP_format="4" main_tree_to_execute="PreQualification_Task">
 
     <BehaviorTree ID="PreQualification_Task">
         <Sequence name="main_mission">
             <!-- 0. SYSTEMS CHECK -->
-            <AllSystemsOK name="check_systems"/>
+            <!-- NOTE: Change timeout_s here to give sensors more time to come online -->
+            <AllSystemsOK name="check_systems" timeout_s="20.0"/>
 
             <!-- 1. INITIALIZE -->
-            <DiveToDepth target_depth="1.5" staystill="2.0"/>
+            <!-- NOTE: Change target_depth here (meters, positive-down) for the initial dive -->
+            <DiveToDepth target_depth="1.5"/>
 
             <!-- 2. GATE MISSION -->
             <Fallback name="find_gate">
                 <IsObjectSeen object="GATE"/>
                 <Do360Turn success_when_seen="GATE"/>
             </Fallback>
-            <DriveThruGate gate_depth="6.0" entry_pose="{T1}" staystill="0.0"/>
-
-            <!-- Surge forward after clearing the gate before searching for the pole -->
-            <SurgeForward duration="5.0"/>
+            
+            <!-- NOTE: Change 'threshold' here to set how close to get to the gate before passing -->
+            <ApproachObject object="GATE" threshold="1.0"/>
+            
+            <!-- NOTE: Surge through and clear the gate (Uses frame-counting in C++) -->
+            <DriveThruGate/>
 
             <!-- 3. POLE MISSION -->
             <Fallback name="find_pole">
                 <IsObjectSeen object="POLE"/>
                 <Do360Turn success_when_seen="POLE"/>
             </Fallback>
-            <OrbitPole object="POLE" threshold="1.5" staystill="3.0" surge_duration="2.5"/>
             
-            <!-- 4. RETURN HOME -->
-            <NavigateTo name="return_home_align_1" to="{T1}" duration="8.0" reverse="true"/>
-            <DriveThruGate gate_depth="10.0" staystill="3.0"/> <!-- This handles the 3s surge after 'lost' -->
+            <!-- NOTE: Change 'threshold' here to set the radius of the orbit approach -->
+            <ApproachObject object="POLE" threshold="2.0"/>
+
+            <!-- NOTE: 4-leg square orbit. -->
+            <OrbitPole object="POLE"/>
+            
+            <!-- 4. RETURN HOME (Reactive) -->
+            <Fallback name="find_gate_home">
+                <IsObjectSeen object="GATE"/>
+                <Do360Turn success_when_seen="GATE"/>
+            </Fallback>
+
+            <!-- NOTE: Approach home gate to threshold -->
+            <ApproachObject object="GATE" threshold="1.0"/>
+
+            <!-- NOTE: Clear home gate -->
+            <DriveThruGate/>
         </Sequence>
     </BehaviorTree>
 
     <TreeNodesModel>
-        <Condition ID="AllSystemsOK"/>
+        <Action ID="AllSystemsOK">
+            <input_port name="timeout_s" type="double" default="20.0">Seconds to wait before aborting</input_port>
+        </Action>
         <Condition ID="IsObjectSeen">
             <input_port name="object" type="std::string">GATE or POLE</input_port>
         </Condition>
         <Action ID="DiveToDepth">
             <input_port name="target_depth" type="double">Depth to dive to</input_port>
-            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
         </Action>
         <Action ID="Do360Turn">
             <input_port name="success_when_seen" type="std::string">Stop when this is seen</input_port>
         </Action>
-        <Action ID="DriveThruGate">
-            <input_port name="gate_depth" type="double">Distance to drive after gate</input_port>
-            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
-            <output_port name="entry_pose" type="Pose">Saved pose for return</output_port>
+        <Action ID="ApproachObject">
+            <input_port name="object" type="std::string">Object to approach</input_port>
+            <input_port name="threshold" type="double">Target distance</input_port>
         </Action>
+        <Action ID="DriveThruGate"/>
         <Action ID="OrbitPole">
             <input_port name="object" type="std::string">Object to orbit</input_port>
-            <input_port name="threshold" type="double">Orbit radius</input_port>
-            <input_port name="staystill" type="double" default="0.0">Seconds to stay still after</input_port>
-            <input_port name="surge_duration" type="double" default="4.0">Time to surge after tangent</input_port>
-        </Action>
-        <Action ID="SurgeForward">
-            <input_port name="duration" type="double">Time to surge straight</input_port>
-        </Action>
-        <Action ID="NavigateTo">
-            <input_port name="to" type="Pose">Target pose</input_port>
-            <input_port name="duration" type="double">Time to surge</input_port>
-            <input_port name="reverse" type="bool" default="false">Flip heading by 180 deg</input_port>
+            <input_port name="staystill" type="double" default="0.0">Seconds to pause at threshold before orbiting</input_port>
         </Action>
     </TreeNodesModel>
 
