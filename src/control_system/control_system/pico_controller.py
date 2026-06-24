@@ -32,15 +32,16 @@ class PicoController(Node):
         # PID gains — surge / depth / yaw
         self.declare_parameter('kp_surge', 1.5)
         self.declare_parameter('ki_surge', 0.0)
-        self.declare_parameter('kd_surge', 0.3)
+        self.declare_parameter('kd_surge', 0.2)
 
         self.declare_parameter('kp_depth', 60.0)
         self.declare_parameter('ki_depth', 0.50)
         self.declare_parameter('kd_depth', 0.00)
 
-        self.declare_parameter('kp_yaw', 4.0)
+        # Reduce yaw gains so yaw control doesn't overpower surge
+        self.declare_parameter('kp_yaw', 1.2)
         self.declare_parameter('ki_yaw', 0.0)
-        self.declare_parameter('kd_yaw', 1.2)
+        self.declare_parameter('kd_yaw', 0.6)
 
         # Output saturation (N or N·m at /cmd_vel level — matches allocation_matrix scale)
         self.declare_parameter('surge_limit', 40.0)

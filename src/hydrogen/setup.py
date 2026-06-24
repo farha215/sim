@@ -72,6 +72,7 @@ setup(
             'data_distance_node = hydrogen.data_distance_node:main',
             'vision_fusion_node = hydrogen.vision_fusion_node:main',
             'teleop_hold_down = hydrogen.teleop_hold_down:main',
+            'surge_service = hydrogen.surge_service:main',
             
         ],
     },

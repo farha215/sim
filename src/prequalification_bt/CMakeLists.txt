@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ── ROS2 / ament dependencies ─────────────────────────────────────────────────
 find_package(ament_cmake      REQUIRED)
 find_package(rclcpp           REQUIRED)
+find_package(rclcpp_action    REQUIRED)
 find_package(geometry_msgs    REQUIRED)
 find_package(sensor_msgs      REQUIRED)
 find_package(std_msgs         REQUIRED)
@@ -30,6 +31,7 @@ target_include_directories(prequalification PRIVATE
 
 ament_target_dependencies(prequalification
     rclcpp
+    rclcpp_action
     geometry_msgs
     sensor_msgs
     std_msgs

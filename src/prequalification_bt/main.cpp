@@ -55,7 +55,17 @@ int main(int argc, char** argv) {
                 std::lock_guard<std::mutex> g(ctx->mtx);
                 ctx->latest_detections = msg;
             });
-
+    
+            
+    
+    
+    ctx->image_sub = node->create_subscription<sensor_msgs::msg::Image>(
+        "/zed2i_front/zed_node/rgb/color/rect/image", 10,
+        [ctx](const sensor_msgs::msg::Image::SharedPtr msg) {
+            std::lock_guard<std::mutex> g(ctx->mtx);
+            ctx->image_received = true;
+            ctx->last_image_t = ctx->node->get_clock()->now().seconds();
+        });
     // --- Behavior Tree Initialization ---------------------------------------
     BT::BehaviorTreeFactory factory;
     registerAllNodes(factory);

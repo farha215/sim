@@ -155,6 +155,11 @@ def generate_launch_description():
     	parameters=[{'use_sim_time': True}],
     )
 
+    surge_service=Node(
+        package='hydrogen',
+    	executable='surge_service',
+    )
+
     # ---------------- Launch Description ----------------
     ld = LaunchDescription()
 
@@ -177,6 +182,7 @@ def generate_launch_description():
     ld.add_action(pressure_converter)
     ld.add_action(pico_controller)
     ld.add_action(vision_fusion_node)
+    ld.add_action(surge_service)
 
 
     return ld
