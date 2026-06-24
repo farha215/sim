@@ -82,6 +82,7 @@
       <pose>5.30471 -2.17711 -0.76105 0 -0 0.507634</pose>
     </include>
 
+    <!--
     <include>
      <uri>model://white_pole</uri>
       <name>whitepole1</name>
@@ -135,6 +136,7 @@
       <name>whitepole6</name>
       <pose>8.05 -8 -0.52 0 0 0</pose>
     </include>
+    -->
 
     <include>
       <uri>model://bruvs</uri>
@@ -142,6 +144,7 @@
       <pose>3.39651 0 -0.834655 0 -0 0</pose>
     </include>
     
+    <!--
         <include>
      <uri>model://white_pole</uri>
       <name>whitepole7</name>
@@ -195,6 +198,7 @@
       <name>whitepole12</name>
       <pose>6.05 6 -0.52 0 0 0</pose>
     </include>
+    -->
     
     <include>
       <uri>model://buoy</uri>
