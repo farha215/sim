@@ -55,7 +55,7 @@ struct RobotContext {
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub;
 
   // --- MISSION CONFIGURATION (LOADED VIA YAML) ---
-  float base_surge_speed = 0.1f;
+  float base_surge_speed = 2.0f;
   float base_yaw_speed = 0.1f;
   float gate_conf_thresh = 0.6f;
   float pole_conf_thresh = 0.3f;
@@ -64,7 +64,7 @@ struct RobotContext {
   float depth_tolerance = 0.15f;
   float gate_align_deadband = 0.04f;
   float pole_align_deadband = 0.06f;
-  float orbit_surge_duration = 4.0f;
+  float orbit_surge_duration = 6.0f;
   float orbit_step_angle = 85.0f;
 
   /**
