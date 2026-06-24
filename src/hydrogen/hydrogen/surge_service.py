@@ -185,6 +185,7 @@ class SurgeDistanceNode(Node):
                 return Surge.Result(success=False, message='distance must be > 0')
 
             self.anchor = self.odom
+            
             self.target = dist
             self.target_depth = self.hold_depth
             self.done_evt.clear()

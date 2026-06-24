@@ -21,7 +21,7 @@ NOTE: If you change this file, you MUST RESTART the Behavior Tree node to reload
 
             <!-- 2. GATE MISSION -->
             
-            <!-- <SurgeForwardDistance distance="2.0"/> -->
+            <SurgeForwardDistance distance="2.0"/>
 
 
             <!-- NOTE: Change 'threshold' here to set how close to get to the gate before passing -->
@@ -37,23 +37,23 @@ NOTE: If you change this file, you MUST RESTART the Behavior Tree node to reload
             
             <!-- NOTE: Change 'threshold' here to set the radius of the orbit approach -->
 
-            <!-- <SurgeForwardDistance distance="4.0"/>
+            <SurgeForwardDistance distance="5.0"/>
             <StayStill duration="2.0"/>
 
             <SurgeForwardDistance distance="4.0"/>
-            <StayStill duration="2.0"/> -->
+            <StayStill duration="2.0"/>
             <!-- <ApproachObject object="POLE" threshold="1.0"/> -->
 
             <!-- NOTE: 5-leg square orbit. Pauses 3s at threshold, then X, 2X, 2X, 2X, X surges.
                  Surge duration X is orbit_surge_duration in mission_params.yaml. -->
             <OrbitPole object="POLE" staystill="3.0"/>
             <!-- <SurgeForwardDistance distance="8.0"/> -->
-            <!-- <SurgeForwardDistance distance="4.0"/>
+            <SurgeForwardDistance distance="5.0"/>
             <StayStill duration="2.0"/>
             <SurgeForwardDistance distance="4.0"/>
             <StayStill duration="2.0"/>
             
-            <SurgeForwardDistance distance="2.0"/> -->
+            <SurgeForwardDistance distance="2.0"/>
 
             <!-- <Exploration target_object="GATE" grace_duration="15.0"/> -->
             <!-- 4. RETURN HOME (Reactive) -->

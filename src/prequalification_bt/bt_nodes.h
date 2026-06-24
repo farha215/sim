@@ -36,7 +36,9 @@ struct RobotContext {
 
   sensor_msgs::msg::Imu::SharedPtr latest_imu;
   double latest_altimeter = 0.0;
-  double target_depth = 0.0;
+  double target_depth = 1.0;
+  bool use_locked_yaw = false;
+  double locked_yaw = 0.0;
   vision_msgs::msg::Detection3DArray::SharedPtr latest_detections;
 
   bool imu_received = false;
@@ -55,7 +57,7 @@ struct RobotContext {
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr image_sub;
 
   // --- MISSION CONFIGURATION (LOADED VIA YAML) ---
-  float base_surge_speed = 2.0f;
+  float base_surge_speed = 3.0f;
   float base_yaw_speed = 0.1f;
   float gate_conf_thresh = 0.6f;
   float pole_conf_thresh = 0.3f;
@@ -64,7 +66,7 @@ struct RobotContext {
   float depth_tolerance = 0.15f;
   float gate_align_deadband = 0.04f;
   float pole_align_deadband = 0.06f;
-  float orbit_surge_duration = 6.0f;
+  float orbit_surge_duration = 12.0f;
   float orbit_step_angle = 85.0f;
 
   /**

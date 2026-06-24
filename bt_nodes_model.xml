@@ -1,0 +1,39 @@
+<root BTCPP_format="4">
+    <TreeNodesModel>
+        <Action ID="AllSystemsOK">
+            <input_port name="timeout_s" type="double" default="20.000000">Seconds to wait before giving up</input_port>
+        </Action>
+        <Action ID="ApproachObject">
+            <input_port name="angle" type="double" default="0.000000">Target heading angle in radians</input_port>
+            <input_port name="threshold" type="double" default="1.500000">Detection threshold / count</input_port>
+            <input_port name="object" type="std::string">Target object to approach</input_port>
+        </Action>
+        <Action ID="DiveToDepth">
+            <input_port name="target_depth" type="double"/>
+        </Action>
+        <Action ID="Do360Turn">
+            <input_port name="success_when_seen" type="std::string"/>
+        </Action>
+        <Action ID="DriveThruGate"/>
+        <Action ID="Exploration">
+            <input_port name="grace_duration" type="double" default="15.000000">Seconds to keep surging after the first non-target detection before returning FAILURE</input_port>
+            <input_port name="target_object" type="std::string">Object to search for while surging: POLE or GATE</input_port>
+        </Action>
+        <Condition ID="IsObjectSeen">
+            <input_port name="object" type="std::string"/>
+        </Condition>
+        <Action ID="OrbitPole">
+            <input_port name="staystill" type="double" default="0.000000">Seconds to pause at threshold before orbiting</input_port>
+            <input_port name="object" type="std::string"/>
+        </Action>
+        <Action ID="StayStill">
+            <input_port name="duration" type="double" default="3.000000">Seconds to hold still</input_port>
+        </Action>
+        <Action ID="SurgeForward">
+            <input_port name="duration" type="double" default="5.000000">Seconds to surge forward</input_port>
+        </Action>
+        <Action ID="SurgeForwardDistance">
+            <input_port name="distance" type="double" default="1.000000">metres to surge forward</input_port>
+        </Action>
+    </TreeNodesModel>
+</root>
