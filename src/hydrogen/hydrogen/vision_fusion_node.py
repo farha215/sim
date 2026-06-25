@@ -57,7 +57,7 @@ class VisionFusionNode(Node):
 
         # Load YOLO Model for Gate
         package_share_directory = get_package_share_directory('hydrogen')
-        model_path = os.path.join(package_share_directory, 'prequal.pt')
+        model_path = os.path.join(package_share_directory, 'best.pt')
         self.model = YOLO(model_path)
         self.get_logger().info(f"YOLO model loaded for gate detection from {model_path}")
 
@@ -144,8 +144,8 @@ class VisionFusionNode(Node):
                 cls = int(box.cls[0].cpu().numpy())
                 cls_name = self.model.names.get(cls, str(cls))
 
-                # We only want the gate from the model
-                if cls_name != "preq_gate" or conf < self.gate_conf:
+                # We want all objects from the model, just check confidence
+                if conf < self.gate_conf:
                     continue
 
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
@@ -160,14 +160,14 @@ class VisionFusionNode(Node):
                 y_3d = (v_center - cy) * z / fy
 
                 # Add to output
-                self.add_detection_3d(out, "preq_gate", conf, x_3d, y_3d, z, (x2-x1), (y2-y1))
-                self.add_detection(det_array, "preq_gate", conf, x_3d, y_3d, z,
+                self.add_detection_3d(out, cls_name, conf, x_3d, y_3d, z, (x2-x1), (y2-y1))
+                self.add_detection(det_array, cls_name, conf, x_3d, y_3d, z,
                                     u_center, v_center, (x2-x1), (y2-y1), tracking_id)
                 tracking_id += 1
 
                 # Visualization
                 cv2.rectangle(rgb_cv, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                cv2.putText(rgb_cv, f"gate: {z:.2f}m", (int(x1), int(y1) - 10),
+                cv2.putText(rgb_cv, f"{cls_name}: {z:.2f}m", (int(x1), int(y1) - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # ── 3. Pole Detection (HSV - Red) ────────────────────────────────────

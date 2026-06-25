@@ -68,7 +68,8 @@ class ImageCollector(Node):
                     det.bbox.size_y = float(y2 - y1)
 
                     hyp = ObjectHypothesisWithPose()
-                    hyp.hypothesis.class_id = str(cls)
+                    class_name = self.model.names.get(cls, str(cls))
+                    hyp.hypothesis.class_id = class_name
                     hyp.hypothesis.score = conf
                     det.results.append(hyp)
 

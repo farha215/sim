@@ -183,10 +183,10 @@
   </library_effects>
   <library_images>
     <image id="Slide3_png" name="Slide3_png">
-      <init_from>Slide3.png</init_from>
+      <init_from>shark.png</init_from>
     </image>
     <image id="Slide4_png" name="Slide4_png">
-      <init_from>Slide4.png</init_from>
+      <init_from>sawfish.png</init_from>
     </image>
   </library_images>
   <library_materials>

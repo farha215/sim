@@ -1,0 +1,9 @@
+main_task_node:
+  ros__parameters:
+    base_surge_speed: 6.0
+    base_yaw_speed: 1.5
+    gate_conf_thresh: 0.35
+    pole_conf_thresh: 0.30
+    depth_tolerance: 0.15
+    pole_approach_threshold: 1.0
+    gate_staystill_time: 1.0

@@ -158,12 +158,12 @@ def generate_launch_description():
     # ---------------- Launch Description ----------------
     ld = LaunchDescription()
 
-    ld.add_action(DeclareLaunchArgument('x', default_value='-4.5', description='Spawn X position'))
-    ld.add_action(DeclareLaunchArgument('y', default_value='-22.0', description='Spawn Y position'))
-    ld.add_action(DeclareLaunchArgument('z', default_value='2.5', description='Spawn Z position'))
-    ld.add_action(DeclareLaunchArgument('R', default_value='0.0', description='Spawn Roll'))
-    ld.add_action(DeclareLaunchArgument('P', default_value='0.0', description='Spawn Pitch'))
-    ld.add_action(DeclareLaunchArgument('Y', default_value='0.0', description='Spawn Yaw'))
+    ld.add_action(DeclareLaunchArgument('x', default_value='4.139140', description='Spawn X position'))
+    ld.add_action(DeclareLaunchArgument('y', default_value='-22.627100', description='Spawn Y position'))
+    ld.add_action(DeclareLaunchArgument('z', default_value='-0.482128', description='Spawn Z position'))
+    ld.add_action(DeclareLaunchArgument('R', default_value='-0.001752', description='Spawn Roll'))
+    ld.add_action(DeclareLaunchArgument('P', default_value='0.001119', description='Spawn Pitch'))
+    ld.add_action(DeclareLaunchArgument('Y', default_value='-2.317710', description='Spawn Yaw'))
 
     ld.add_action(set_ign_resource_path)
     ld.add_action(set_gz_resource_path)
